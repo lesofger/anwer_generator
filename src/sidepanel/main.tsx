@@ -415,25 +415,14 @@ const App = () => {
         </button>
       </header>
 
-      <section className={currentTabActive ? "card activation-card active" : "card activation-card"}>
-        <div className="section-title">
-          <h2>Page activation</h2>
-          <span>{currentTabActive ? "Active" : "Inactive"}</span>
-        </div>
+      <section className={currentTabActive ? "activation-compact active" : "activation-compact"}>
         {currentJobTabId ? (
-          <>
-            <label className="check-row">
-              <input
-                checked={currentTabActive}
-                onChange={(event) => toggleCurrentTabActivation(event.target.checked)}
-                type="checkbox"
-              />
-              Activate capture for this job page
-            </label>
-            <p className="muted">Only this browser tab will show the selection capture buttons.</p>
-          </>
+          <label className="check-row">
+            <input checked={currentTabActive} onChange={(event) => toggleCurrentTabActivation(event.target.checked)} type="checkbox" />
+            Capture on this job page
+          </label>
         ) : (
-          <p className="muted">Open the job application tab to activate capture for that page.</p>
+          <p className="muted">Open job page to activate capture.</p>
         )}
       </section>
 

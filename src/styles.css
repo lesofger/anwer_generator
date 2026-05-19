@@ -228,6 +228,27 @@ select {
   background: #f7fef9;
 }
 
+.activation-compact {
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  background: #fffafa;
+  padding: 8px 10px;
+}
+
+.activation-compact.active {
+  border-color: #bbf7d0;
+  background: #f7fef9;
+}
+
+.activation-compact .check-row {
+  gap: 8px;
+  font-size: 12px;
+}
+
+.activation-compact .muted {
+  margin: 0;
+}
+
 .status,
 .error {
   margin: 0;

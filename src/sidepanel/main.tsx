@@ -48,6 +48,7 @@ const App = () => {
   const [manualResponse, setManualResponse] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
   const [showFallback, setShowFallback] = useState(false);
+  const [currentJobTabId, setCurrentJobTabId] = useState<number | undefined>();
 
   const draftPrompt = useMemo(
     () =>
@@ -97,10 +98,38 @@ const App = () => {
     return () => chrome.storage.onChanged.removeListener(listener);
   }, []);
 
+  useEffect(() => {
+    const refreshCurrentTab = async () => {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      setCurrentJobTabId(activeTab?.id && !isChatGptUrl(activeTab.url) ? activeTab.id : undefined);
+    };
+
+    void refreshCurrentTab();
+    chrome.tabs.onActivated.addListener(refreshCurrentTab);
+    chrome.tabs.onUpdated.addListener(refreshCurrentTab);
+    return () => {
+      chrome.tabs.onActivated.removeListener(refreshCurrentTab);
+      chrome.tabs.onUpdated.removeListener(refreshCurrentTab);
+    };
+  }, []);
+
   const addQuestion = () => {
     void setAndPersist((current) => ({
       ...current,
       questions: [...current.questions, { id: createId(), text: "", templateId: current.selectedTemplateId }]
+    }));
+  };
+
+  const toggleCurrentTabActivation = (enabled: boolean) => {
+    if (!currentJobTabId) {
+      return;
+    }
+
+    void setAndPersist((current) => ({
+      ...current,
+      activeCaptureTabId: enabled ? currentJobTabId : undefined,
+      targetTabId: enabled ? currentJobTabId : current.targetTabId,
+      statusMessage: enabled ? "Capture activated for this job page." : "Capture deactivated."
     }));
   };
 
@@ -368,6 +397,7 @@ const App = () => {
 
   const usesCustomTemplate =
     state.selectedTemplateId === "custom" || state.questions.some((question) => question.templateId === "custom");
+  const currentTabActive = Boolean(currentJobTabId && currentJobTabId === state.activeCaptureTabId);
 
   if (loading) {
     return <main className="panel loading">Loading...</main>;
@@ -384,6 +414,28 @@ const App = () => {
           Reset
         </button>
       </header>
+
+      <section className={currentTabActive ? "card activation-card active" : "card activation-card"}>
+        <div className="section-title">
+          <h2>Page activation</h2>
+          <span>{currentTabActive ? "Active" : "Inactive"}</span>
+        </div>
+        {currentJobTabId ? (
+          <>
+            <label className="check-row">
+              <input
+                checked={currentTabActive}
+                onChange={(event) => toggleCurrentTabActivation(event.target.checked)}
+                type="checkbox"
+              />
+              Activate capture for this job page
+            </label>
+            <p className="muted">Only this browser tab will show the selection capture buttons.</p>
+          </>
+        ) : (
+          <p className="muted">Open the job application tab to activate capture for that page.</p>
+        )}
+      </section>
 
       <section className="card">
         <div className="section-title">

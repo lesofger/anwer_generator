@@ -30,6 +30,7 @@ export interface AppState {
   includeResume: boolean;
   useNewChatGptTab: boolean;
   targetTabId?: number;
+  activeCaptureTabId?: number;
   questions: JobQuestion[];
   selectedTemplateId: PromptTemplateId;
   customPrompt: string;
@@ -73,6 +74,9 @@ export type RuntimeMessage =
     }
   | {
       type: "OPEN_SIDE_PANEL";
+    }
+  | {
+      type: "CHECK_CAPTURE_ACTIVE";
     }
   | {
       type: "GENERATE_ANSWERS";

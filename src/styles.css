@@ -218,6 +218,16 @@ select {
   padding: 10px;
 }
 
+.activation-card {
+  border-color: #fecaca;
+  background: #fffafa;
+}
+
+.activation-card.active {
+  border-color: #bbf7d0;
+  background: #f7fef9;
+}
+
 .status,
 .error {
   margin: 0;

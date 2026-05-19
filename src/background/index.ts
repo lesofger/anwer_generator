@@ -189,6 +189,13 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
     return true;
   }
 
+  if (message.type === "CHECK_CAPTURE_ACTIVE") {
+    void loadState().then((state) => {
+      sendResponse({ active: Boolean(sender.tab?.id && sender.tab.id === state.activeCaptureTabId) });
+    });
+    return true;
+  }
+
   if (message.type === "GENERATE_ANSWERS") {
     void generateAnswers(message).then(sendResponse);
     return true;

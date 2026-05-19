@@ -47,6 +47,11 @@ const removeBubble = () => {
   document.getElementById(bubbleId)?.remove();
 };
 
+const isCurrentPageActive = async () => {
+  const response = await chrome.runtime.sendMessage({ type: "CHECK_CAPTURE_ACTIVE" } satisfies RuntimeMessage);
+  return Boolean(response?.active);
+};
+
 const sendCapture = (kind: CaptureKind, text: string) => {
   const message: RuntimeMessage = {
     type: "CAPTURE_SELECTION",
@@ -72,11 +77,11 @@ const createButton = (label: string, onClick: () => void) => {
   return button;
 };
 
-const showBubble = () => {
+const showBubble = async () => {
   const text = selectedText();
   removeBubble();
 
-  if (!text) {
+  if (!text || !(await isCurrentPageActive())) {
     return;
   }
 

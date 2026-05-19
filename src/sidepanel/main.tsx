@@ -443,7 +443,7 @@ const App = () => {
         ) : null}
       </section>
 
-      <section className="card sticky-actions">
+      <section className="card">
         <div className="mode-card">
           <label className="check-row">
             <input

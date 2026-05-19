@@ -29,6 +29,7 @@ export interface AppState {
   resumeText: string;
   includeResume: boolean;
   useNewChatGptTab: boolean;
+  targetTabId?: number;
   questions: JobQuestion[];
   selectedTemplateId: PromptTemplateId;
   customPrompt: string;

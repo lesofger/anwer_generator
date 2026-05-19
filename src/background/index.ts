@@ -52,14 +52,13 @@ const createChatGptTab = async () => {
   return created.id;
 };
 
-const getOrCreateChatGptTab = async (useNewTab: boolean) => {
-  if (useNewTab) {
-    return createChatGptTab();
-  }
-
+const getOrCreateChatGptTab = async (startNewChat: boolean) => {
   const existing = await findChatGptTab();
   if (existing?.id) {
-    await chrome.tabs.update(existing.id, { active: true });
+    await chrome.tabs.update(existing.id, { active: true, url: startNewChat ? CHATGPT_URL : existing.url });
+    if (startNewChat) {
+      await waitForTabLoaded(existing.id);
+    }
     return existing.id;
   }
 
@@ -163,10 +162,12 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
           ? {
               ...current,
               jobDescription: message.text,
+              targetTabId: sender.tab?.id,
               statusMessage: "Job description captured."
             }
           : {
               ...current,
+              targetTabId: sender.tab?.id,
               questions: [...current.questions, { id: createId(), text: message.text, templateId: current.selectedTemplateId }],
               statusMessage: "Question added."
             };

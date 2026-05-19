@@ -39,6 +39,9 @@ const parseAnswersFromText = (text: string): GeneratedAnswer[] => {
   return parsed.answers;
 };
 
+const isChatGptUrl = (url: string | undefined) =>
+  Boolean(url && /^https:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(url));
+
 const App = () => {
   const [state, setState] = useState<AppState>(defaultState);
   const [loading, setLoading] = useState(true);
@@ -213,23 +216,95 @@ const App = () => {
     }, 1400);
   };
 
-  const insertAnswer = async (question: JobQuestion) => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab.id) {
-      return;
+  const getTargetTabId = async () => {
+    if (state.targetTabId) {
+      return state.targetTabId;
     }
 
-    const response = await chrome.tabs.sendMessage(tab.id, {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab.id && !isChatGptUrl(activeTab.url)) {
+      return activeTab.id;
+    }
+
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    return tabs.find((tab) => tab.id && !isChatGptUrl(tab.url))?.id;
+  };
+
+  const sendAnswerToPage = async (tabId: number, question: JobQuestion) =>
+    chrome.tabs.sendMessage(tabId, {
       type: "INSERT_ANSWER",
       answer: question.answer ?? "",
       questionText: question.text
-    } satisfies RuntimeMessage);
+    } satisfies RuntimeMessage) as Promise<{ ok: boolean; copied?: boolean }>;
+
+  const insertAnswer = async (question: JobQuestion) => {
+    const tabId = await getTargetTabId();
+    if (!tabId) {
+      await setAndPersist((current) => ({
+        ...current,
+        status: "failed",
+        statusMessage: "Could not find the job page tab.",
+        lastError: "Open the job application page, then try Insert in page again."
+      }));
+      return;
+    }
+
+    try {
+      const response = await sendAnswerToPage(tabId, question);
+
+      await setAndPersist((current) => ({
+        ...current,
+        status: response?.ok ? "done" : "failed",
+        statusMessage: response?.ok ? "Inserted answer into the page." : "Could not find the answer field. Copied answer instead.",
+        lastError: response?.ok ? "" : "Try clicking the target answer field first, then press Insert in page again."
+      }));
+    } catch (error) {
+      await setAndPersist((current) => ({
+        ...current,
+        status: "failed",
+        statusMessage: "Could not reach the job page.",
+        lastError: error instanceof Error ? error.message : String(error)
+      }));
+    }
+  };
+
+  const insertAllAnswers = async () => {
+    const answeredQuestions = state.questions.filter((question) => question.answer);
+    const tabId = await getTargetTabId();
+
+    if (!tabId || answeredQuestions.length === 0) {
+      await setAndPersist((current) => ({
+        ...current,
+        status: "failed",
+        statusMessage: "No target page or answers available for Insert all.",
+        lastError: "Open the job application page and make sure answers have been generated."
+      }));
+      return;
+    }
+
+    let insertedCount = 0;
+    for (const question of answeredQuestions) {
+      try {
+        const response = await sendAnswerToPage(tabId, question);
+        if (response?.ok) {
+          insertedCount += 1;
+        }
+      } catch {
+        // Keep trying remaining answers; the final status reports partial success.
+      }
+    }
 
     await setAndPersist((current) => ({
       ...current,
-      status: response?.ok ? "done" : "failed",
-      statusMessage: response?.ok ? "Inserted answer into the page." : "Could not find the answer field. Copied answer instead.",
-      lastError: response?.ok ? "" : "Try clicking the target answer field first, then press Insert in page again."
+      status: insertedCount === answeredQuestions.length ? "done" : "failed",
+      statusMessage:
+        insertedCount === answeredQuestions.length
+          ? `Inserted all ${insertedCount} answers into the page.`
+          : `Inserted ${insertedCount} of ${answeredQuestions.length} answers.`,
+      lastError:
+        insertedCount === answeredQuestions.length
+          ? ""
+          : "Some fields could not be matched. Try inserting those answers one by one."
     }));
   };
 
@@ -451,10 +526,10 @@ const App = () => {
               onChange={(event) => void setAndPersist({ ...state, useNewChatGptTab: event.target.checked })}
               type="checkbox"
             />
-            Open a new ChatGPT tab for generation
+            Start a new ChatGPT chat for generation
           </label>
           <p className="muted">
-            Turn this on for long context or a clean conversation. Leave it off to reuse an existing ChatGPT tab.
+            Turn this on for long context or a clean conversation. It reuses the ChatGPT browser tab but starts a fresh chat.
           </p>
         </div>
         <button className="primary" onClick={() => void generateAnswers()} type="button">
@@ -509,7 +584,13 @@ const App = () => {
       <section className="card">
         <div className="section-title">
           <h2>Answer workspace</h2>
-          <span>{state.questions.filter((question) => question.answer).length} ready</span>
+          {state.questions.some((question) => question.answer) ? (
+            <button onClick={() => void insertAllAnswers()} type="button">
+              Insert all
+            </button>
+          ) : (
+            <span>{state.questions.filter((question) => question.answer).length} ready</span>
+          )}
         </div>
         {state.questions.some((question) => question.answer) ? (
           <div className="answer-list">

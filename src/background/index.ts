@@ -1,0 +1,197 @@
+import { buildPrompt } from "../lib/promptBuilder";
+import { createId, type AppState, type GenerateResponse, type GeneratedAnswer, type RuntimeMessage } from "../lib/messages";
+import { loadState, patchState } from "../lib/storage";
+
+const CHATGPT_URL = "https://chatgpt.com/";
+const CHATGPT_MATCH = /^https:\/\/(chatgpt\.com|chat\.openai\.com)\//;
+
+chrome.runtime.onInstalled.addListener(() => {
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+});
+
+chrome.action.onClicked.addListener((tab) => {
+  if (tab.windowId) {
+    void chrome.sidePanel.open({ windowId: tab.windowId });
+  }
+});
+
+const notifyPanel = async (patch: Partial<AppState>) => {
+  await patchState(patch);
+};
+
+const findChatGptTab = async () => {
+  const tabs = await chrome.tabs.query({});
+  return tabs.find((tab) => tab.url && CHATGPT_MATCH.test(tab.url));
+};
+
+const waitForTabLoaded = (tabId: number) =>
+  new Promise<void>((resolve) => {
+    chrome.tabs.get(tabId, (tab) => {
+      if (tab.status === "complete") {
+        resolve();
+        return;
+      }
+
+      const listener: Parameters<typeof chrome.tabs.onUpdated.addListener>[0] = (updatedTabId, info) => {
+        if (updatedTabId === tabId && info.status === "complete") {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+  });
+
+const createChatGptTab = async () => {
+  const created = await chrome.tabs.create({ url: CHATGPT_URL, active: true });
+  if (!created.id) {
+    throw new Error("Could not open ChatGPT tab.");
+  }
+
+  await waitForTabLoaded(created.id);
+  return created.id;
+};
+
+const getOrCreateChatGptTab = async (useNewTab: boolean) => {
+  if (useNewTab) {
+    return createChatGptTab();
+  }
+
+  const existing = await findChatGptTab();
+  if (existing?.id) {
+    await chrome.tabs.update(existing.id, { active: true });
+    return existing.id;
+  }
+
+  return createChatGptTab();
+};
+
+const injectChatGptAdapter = async (tabId: number) => {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["dist/assets/chatgpt.js"]
+    });
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["assets/chatgpt.js"]
+    });
+  }
+};
+
+const sendToTab = <T>(tabId: number, message: RuntimeMessage): Promise<T> =>
+  new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, message, (response: T) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+
+      resolve(response);
+    });
+  });
+
+const extractJson = (text: string) => {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const candidate = fenced ?? trimmed;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("No JSON object found in ChatGPT response.");
+  }
+
+  return JSON.parse(candidate.slice(start, end + 1)) as { answers?: GeneratedAnswer[] };
+};
+
+const generateAnswers = async (message: Extract<RuntimeMessage, { type: "GENERATE_ANSWERS" }>): Promise<GenerateResponse> => {
+  const prompt = buildPrompt(message.payload);
+
+  try {
+    await notifyPanel({
+      latestPrompt: prompt,
+      status: "opening-chatgpt",
+      statusMessage: "Opening ChatGPT...",
+      lastError: ""
+    });
+
+    const tabId = await getOrCreateChatGptTab(message.payload.useNewChatGptTab);
+    await injectChatGptAdapter(tabId);
+
+    await notifyPanel({
+      status: "submitting-prompt",
+      statusMessage: "Submitting prompt to ChatGPT..."
+    });
+
+    const result = await sendToTab<{ ok: boolean; text?: string; error?: string }>(tabId, {
+      type: "CHATGPT_SUBMIT_PROMPT",
+      prompt
+    });
+
+    if (!result.ok || !result.text) {
+      throw new Error(result.error ?? "ChatGPT did not return a response.");
+    }
+
+    await notifyPanel({
+      status: "waiting-for-answer",
+      statusMessage: "Parsing ChatGPT answer..."
+    });
+
+    const parsed = extractJson(result.text);
+    if (!Array.isArray(parsed.answers)) {
+      throw new Error("ChatGPT response JSON did not include an answers array.");
+    }
+
+    return { ok: true, answers: parsed.answers, rawText: result.text, prompt };
+  } catch (error) {
+    return {
+      ok: false,
+      prompt,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+};
+
+chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
+  if (message.type === "CAPTURE_SELECTION") {
+    void (async () => {
+      const current = await loadState();
+      const next =
+        message.kind === "jobDescription"
+          ? {
+              ...current,
+              jobDescription: message.text,
+              statusMessage: "Job description captured."
+            }
+          : {
+              ...current,
+              questions: [...current.questions, { id: createId(), text: message.text, templateId: current.selectedTemplateId }],
+              statusMessage: "Question added."
+            };
+
+      await notifyPanel(next);
+      if (sender.tab?.windowId) {
+        await chrome.sidePanel.open({ windowId: sender.tab.windowId });
+      }
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+
+  if (message.type === "OPEN_SIDE_PANEL") {
+    if (sender.tab?.windowId) {
+      void chrome.sidePanel.open({ windowId: sender.tab.windowId });
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.type === "GENERATE_ANSWERS") {
+    void generateAnswers(message).then(sendResponse);
+    return true;
+  }
+
+  return undefined;
+});

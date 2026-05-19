@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Job Answer Helper",
+  "description": "Collect job descriptions and application questions, then draft tailored answers with your logged-in ChatGPT session.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Job Answer Helper"
+  },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "permissions": ["activeTab", "scripting", "sidePanel", "storage", "tabs"],
+  "host_permissions": ["<all_urls>", "https://chatgpt.com/*", "https://chat.openai.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["assets/jobPage.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+import type { AppState, PromptTemplateId } from "./messages";
+
+const STORAGE_KEY = "jobAnswerHelperState";
+const isTemplateId = (value: unknown): value is PromptTemplateId =>
+  value === "short" || value === "long" || value === "longTechnical" || value === "custom";
+
+export const defaultState: AppState = {
+  jobDescription: "",
+  resumeText: "",
+  includeResume: false,
+  useNewChatGptTab: false,
+  questions: [],
+  selectedTemplateId: "long",
+  customPrompt: "",
+  latestPrompt: "",
+  status: "idle",
+  statusMessage: "Ready",
+  lastError: ""
+};
+
+export const normalizeState = (saved: Partial<AppState> | undefined): AppState => {
+  const selectedTemplateId = saved?.selectedTemplateId;
+
+  return {
+    ...defaultState,
+    ...saved,
+    selectedTemplateId: isTemplateId(selectedTemplateId) ? selectedTemplateId : defaultState.selectedTemplateId,
+    questions:
+      saved?.questions?.map((question) => ({
+        ...question,
+        templateId: isTemplateId(question.templateId) ? question.templateId : defaultState.selectedTemplateId
+      })) ?? defaultState.questions
+  };
+};
+
+export const loadState = async (): Promise<AppState> => {
+  const result = await chrome.storage.local.get(STORAGE_KEY);
+  return normalizeState(result[STORAGE_KEY] as Partial<AppState> | undefined);
+};
+
+export const saveState = async (state: AppState): Promise<void> => {
+  await chrome.storage.local.set({ [STORAGE_KEY]: state });
+};
+
+export const patchState = async (patch: Partial<AppState>): Promise<AppState> => {
+  const current = await loadState();
+  const next = { ...current, ...patch };
+  await saveState(next);
+  return next;
+};
+
+export const clearState = async (): Promise<void> => {
+  await saveState(defaultState);
+};

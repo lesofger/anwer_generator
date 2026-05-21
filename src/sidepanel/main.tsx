@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { createCoverLetterDocBlob, formatCoverLetterForDisplay } from "../lib/document";
 import { buildPrompt } from "../lib/promptBuilder";
 import { promptTemplates } from "../lib/promptTemplates";
 import { defaultState, loadState, normalizeState, saveState } from "../lib/storage";
@@ -20,7 +21,7 @@ const sendRuntimeMessage = <T,>(message: RuntimeMessage): Promise<T> =>
     });
   });
 
-const parseAnswersFromText = (text: string): GeneratedAnswer[] => {
+const parseGeneratedContentFromText = (text: string): { answers: GeneratedAnswer[]; coverLetter: string } => {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const candidate = fenced ?? trimmed;
@@ -31,16 +32,24 @@ const parseAnswersFromText = (text: string): GeneratedAnswer[] => {
     throw new Error("Paste the full ChatGPT JSON response, including the answers array.");
   }
 
-  const parsed = JSON.parse(candidate.slice(start, end + 1)) as { answers?: GeneratedAnswer[] };
+  const parsed = JSON.parse(candidate.slice(start, end + 1)) as { answers?: GeneratedAnswer[]; coverLetter?: string };
   if (!Array.isArray(parsed.answers)) {
     throw new Error("The response did not include an answers array.");
   }
 
-  return parsed.answers;
+  return { answers: parsed.answers, coverLetter: parsed.coverLetter ?? "" };
 };
 
 const isChatGptUrl = (url: string | undefined) =>
   Boolean(url && /^https:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(url));
+
+const blobToBase64 = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 
 const App = () => {
   const [state, setState] = useState<AppState>(defaultState);
@@ -56,6 +65,8 @@ const App = () => {
         jobDescription: state.jobDescription,
         resumeText: state.resumeText,
         includeResume: state.includeResume,
+        generateCoverLetter: state.generateCoverLetter,
+        coverLetterSentenceCount: state.coverLetterSentenceCount,
         useNewChatGptTab: state.useNewChatGptTab,
         questions: state.questions,
         templateId: state.selectedTemplateId,
@@ -63,6 +74,8 @@ const App = () => {
       }),
     [
       state.customPrompt,
+      state.coverLetterSentenceCount,
+      state.generateCoverLetter,
       state.includeResume,
       state.jobDescription,
       state.questions,
@@ -80,10 +93,36 @@ const App = () => {
     });
   };
 
+  const loadResumeMarkdown = async (baseState?: AppState) => {
+    const stateForSave = baseState ?? state;
+    try {
+      const response = await fetch(chrome.runtime.getURL("resume.md"));
+      if (!response.ok) {
+        throw new Error("resume.md was not found in the extension folder.");
+      }
+
+      const resumeText = await response.text();
+      await setAndPersist({
+        ...stateForSave,
+        resumeText,
+        includeResume: true,
+        statusMessage: "Loaded resume.md."
+      });
+    } catch (error) {
+      await setAndPersist({
+        ...stateForSave,
+        status: "failed",
+        statusMessage: "Could not load resume.md.",
+        lastError: error instanceof Error ? error.message : String(error)
+      });
+    }
+  };
+
   useEffect(() => {
     void loadState().then((savedState) => {
       setState(savedState);
       setLoading(false);
+      void loadResumeMarkdown(savedState);
     });
 
     const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
@@ -164,12 +203,12 @@ const App = () => {
 
   const generateAnswers = async () => {
     const activeQuestions = state.questions.filter((question) => question.text.trim());
-    if (!state.jobDescription.trim() || activeQuestions.length === 0) {
+    if (!state.jobDescription.trim() || (!state.generateCoverLetter && activeQuestions.length === 0)) {
       await setAndPersist({
         ...state,
         status: "failed",
-        statusMessage: "Add a job description and at least one question first.",
-        lastError: "Missing job description or questions."
+        statusMessage: "Add a job description and request a cover letter or at least one question.",
+        lastError: "Missing job description, cover letter request, or questions."
       });
       return;
     }
@@ -178,6 +217,8 @@ const App = () => {
       jobDescription: state.jobDescription,
       resumeText: state.resumeText,
       includeResume: state.includeResume,
+      generateCoverLetter: state.generateCoverLetter,
+      coverLetterSentenceCount: state.coverLetterSentenceCount,
       useNewChatGptTab: state.useNewChatGptTab,
       questions: activeQuestions.map((question) => ({
         ...question,
@@ -213,11 +254,21 @@ const App = () => {
         return;
       }
 
+      if (response.coverLetter?.trim()) {
+        await downloadCoverDoc(response.coverLetter);
+        try {
+          await uploadCoverDocToPage(response.coverLetter);
+        } catch {
+          // Upload depends on each job site exposing a file input; download still succeeds.
+        }
+      }
+
       await setAndPersist((current) => ({
         ...current,
         latestPrompt: response.prompt ?? latestPrompt,
         status: "done",
-        statusMessage: "Answers generated.",
+        coverLetterText: response.coverLetter?.trim() ? formatCoverLetterForDisplay(response.coverLetter) : current.coverLetterText,
+        statusMessage: response.coverLetter ? "Cover letter and answers generated." : "Answers generated.",
         lastError: "",
         questions: current.questions.map((question) => {
           const answer =
@@ -245,6 +296,21 @@ const App = () => {
     }, 1400);
   };
 
+  const downloadCoverDoc = async (coverLetter = state.coverLetterText) => {
+    if (!coverLetter.trim()) {
+      return null;
+    }
+
+    const blob = createCoverLetterDocBlob(coverLetter);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "cover.doc";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return blob;
+  };
+
   const getTargetTabId = async () => {
     if (state.targetTabId) {
       return state.targetTabId;
@@ -266,6 +332,23 @@ const App = () => {
       questionText: question.text
     } satisfies RuntimeMessage) as Promise<{ ok: boolean; copied?: boolean }>;
 
+  const uploadCoverDocToPage = async (coverLetter = state.coverLetterText) => {
+    const tabId = await getTargetTabId();
+    if (!tabId || !coverLetter.trim()) {
+      return false;
+    }
+
+    const blob = createCoverLetterDocBlob(coverLetter);
+    const base64 = await blobToBase64(blob);
+    const response = (await chrome.tabs.sendMessage(tabId, {
+      type: "UPLOAD_COVER_FILE",
+      fileName: "cover.doc",
+      mimeType: "application/msword",
+      base64
+    } satisfies RuntimeMessage)) as { ok: boolean };
+    return Boolean(response?.ok);
+  };
+
   const insertAnswer = async (question: JobQuestion) => {
     const tabId = await getTargetTabId();
     if (!tabId) {
@@ -284,8 +367,8 @@ const App = () => {
       await setAndPersist((current) => ({
         ...current,
         status: response?.ok ? "done" : "failed",
-        statusMessage: response?.ok ? "Inserted answer into the page." : "Could not find the answer field. Copied answer instead.",
-        lastError: response?.ok ? "" : "Try clicking the target answer field first, then press Insert in page again."
+        statusMessage: response?.ok ? "Inserted answer into the page." : "Could not find a matching answer field.",
+        lastError: response?.ok ? "" : "No changes were made. Try clicking the target field first, then press Insert in page again."
       }));
     } catch (error) {
       await setAndPersist((current) => ({
@@ -337,12 +420,22 @@ const App = () => {
     }));
   };
 
-  const applyAnswers = async (answers: GeneratedAnswer[], successMessage: string) => {
+  const applyGeneratedContent = async (answers: GeneratedAnswer[], coverLetter: string, successMessage: string) => {
+    if (coverLetter.trim()) {
+      await downloadCoverDoc(coverLetter);
+      try {
+        await uploadCoverDocToPage(coverLetter);
+      } catch {
+        // Some sites prevent programmatic file upload; the DOC download is still available.
+      }
+    }
+
     await setAndPersist((current) => ({
       ...current,
       status: "done",
       statusMessage: successMessage,
       lastError: "",
+      coverLetterText: coverLetter.trim() ? formatCoverLetterForDisplay(coverLetter) : current.coverLetterText,
       questions: current.questions.map((question) => {
         const answer =
           answers.find((item) => item.questionId === question.id)?.answer ??
@@ -354,8 +447,8 @@ const App = () => {
 
   const importManualResponse = async () => {
     try {
-      const answers = parseAnswersFromText(manualResponse);
-      await applyAnswers(answers, "Imported ChatGPT answers.");
+      const { answers, coverLetter } = parseGeneratedContentFromText(manualResponse);
+      await applyGeneratedContent(answers, coverLetter, coverLetter ? "Imported cover letter and answers." : "Imported ChatGPT answers.");
       setManualResponse("");
     } catch (error) {
       await setAndPersist((current) => ({
@@ -369,30 +462,6 @@ const App = () => {
 
   const clearAll = async () => {
     await setAndPersist(defaultState);
-  };
-
-  const loadResumeMarkdown = async () => {
-    try {
-      const response = await fetch(chrome.runtime.getURL("resume.md"));
-      if (!response.ok) {
-        throw new Error("resume.md was not found in the extension folder.");
-      }
-
-      const resumeText = await response.text();
-      await setAndPersist({
-        ...state,
-        resumeText,
-        includeResume: true,
-        statusMessage: "Loaded resume.md."
-      });
-    } catch (error) {
-      await setAndPersist({
-        ...state,
-        status: "failed",
-        statusMessage: "Could not load resume.md.",
-        lastError: error instanceof Error ? error.message : String(error)
-      });
-    }
   };
 
   const usesCustomTemplate =
@@ -443,7 +512,7 @@ const App = () => {
         <div className="section-title">
           <h2>Resume</h2>
           <button onClick={() => void loadResumeMarkdown()} type="button">
-            Load resume.md
+            Reload resume.md
           </button>
         </div>
         <label className="check-row">
@@ -460,6 +529,52 @@ const App = () => {
           placeholder="Paste your resume here, or put it in resume.md and click Load resume.md."
           rows={6}
         />
+      </section>
+
+      <section className="card">
+        <div className="section-title">
+          <h2>Cover letter</h2>
+          <span>{state.coverLetterSentenceCount} sentences</span>
+        </div>
+        <label className="check-row">
+          <input
+            checked={state.generateCoverLetter}
+            onChange={(event) => void setAndPersist({ ...state, generateCoverLetter: event.target.checked })}
+            type="checkbox"
+          />
+          Generate cover.doc from resume and job description
+        </label>
+        <label className="field-label">
+          Length
+          <select
+            value={state.coverLetterSentenceCount}
+            onChange={(event) => void setAndPersist({ ...state, coverLetterSentenceCount: Number(event.target.value) })}
+          >
+            <option value={5}>5 sentences</option>
+            <option value={6}>6 sentences</option>
+            <option value={7}>7 sentences</option>
+          </select>
+        </label>
+        {state.coverLetterText ? (
+          <div className="answer-box">
+            <p>{state.coverLetterText}</p>
+            <div className="answer-actions">
+              <button
+                className={copiedKey === "cover-letter" ? "copied" : ""}
+                onClick={() => void copyWithFeedback("cover-letter", state.coverLetterText)}
+                type="button"
+              >
+                {copiedKey === "cover-letter" ? "Copied!" : "Copy"}
+              </button>
+              <button onClick={() => void downloadCoverDoc()} type="button">
+                Download cover.doc
+              </button>
+              <button onClick={() => void uploadCoverDocToPage()} type="button">
+                Upload if possible
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="card">
@@ -559,7 +674,7 @@ const App = () => {
         ) : null}
       </section>
 
-      <section className="card">
+      <section className="card sticky-actions">
         <div className="mode-card">
           <label className="check-row">
             <input
@@ -569,9 +684,6 @@ const App = () => {
             />
             Start a new ChatGPT chat for generation
           </label>
-          <p className="muted">
-            Turn this on for long context or a clean conversation. It reuses the ChatGPT browser tab but starts a fresh chat.
-          </p>
         </div>
         <button className="primary" onClick={() => void generateAnswers()} type="button">
           Generate all answers

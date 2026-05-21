@@ -218,6 +218,12 @@ select {
   padding: 10px;
 }
 
+.sticky-actions {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+}
+
 .activation-card {
   border-color: #fecaca;
   background: #fffafa;

@@ -4,23 +4,23 @@ export const promptTemplates: PromptTemplate[] = [
   {
     id: "short",
     name: "Short",
-    description: "Three-sentence answers for compact application fields.",
+    description: "Brief answers around 250 characters for general application questions.",
     body:
-      "Write exactly 3 sentences. Sentence 1 should directly answer the question and connect the candidate to the role. Sentence 2 should mention one relevant project, architecture, tool, or measurable impact when supported by the resume or job description. Sentence 3 should close with business value, reliability, explainability, safety, or stakeholder trust. Keep the tone concise, honest, and application-ready."
+      "Write around 250 characters, with a hard maximum of 320 characters. Answer the question directly in a natural, professional tone. Use this for general or non-technical application questions, so do not force projects, tools, architecture, metrics, reliability, explainability, or safety unless the question clearly asks for them. Keep it specific to the role and candidate, but concise enough for a small form field. Do not use filler, exaggeration, or generic enthusiasm."
   },
   {
     id: "long",
     name: "Long",
-    description: "Five-sentence answers with stronger context and impact.",
+    description: "Substantial answers grounded in relevant experience and impact.",
     body:
-      "Write exactly 5 sentences. Start with a direct answer that mirrors the role's needs. Include specific projects, architectures, tools, and measurable impact when the source material supports it. Explain how the candidate thinks about reliability, explainability, safety, and business trust in practical terms. Keep the answer polished, concrete, and human, without inventing experience."
+      "Write 4 to 6 polished sentences. Start with a direct answer that clearly addresses the question and mirrors the role's needs. Ground the answer in the candidate's most relevant resume evidence, such as specific projects, systems, tools, architectures, AI/ML workflows, backend work, full-stack work, or measurable impact when supported. Explain the candidate's practical judgment around reliability, scalability, explainability, safety, business trust, or stakeholder value only when relevant to the question. Keep it concrete, human, and senior-engineer-like, without inventing experience or repeating the same point."
   },
   {
     id: "longTechnical",
     name: "Long technical",
     description: "Seven-sentence answers for technical or senior-role questions.",
     body:
-      "Write exactly 7 sentences. Give a direct answer, then ground it in specific technical evidence from the resume and job description. Mention relevant projects, architectures, tools, systems, data flows, model or agent workflows, evaluation methods, or deployment practices when supported by the source material. Show how the candidate designed for reliability, explainability, safety, and business trust. Include measurable impact or a credible business outcome when available. Make the answer technical enough for an engineering reviewer but clear enough for a recruiter. Do not fabricate details; if a detail is missing, speak in terms of approach and judgment."
+      "Write 6 to 8 sentences for technical, architecture, senior-engineering, AI, ML, MLOps, backend, or systems questions. Open with a direct technical answer, then support it with the strongest relevant evidence from the resume and job description. Prioritize concrete projects, architectures, tools, data flows, model or agent workflows, evaluation methods, deployment practices, observability, CI/CD, performance, or scalability when explicitly supported. Emphasize how the candidate designed or would design for reliability, explainability, safety, maintainability, and business trust in practical engineering terms. Include measured impact, scale, performance improvement, quality improvement, or business outcome only when available in the source material. Make the answer credible to an engineering reviewer while still readable for a recruiter. Do not fabricate details; if something is not in the resume or job description, describe approach, tradeoffs, and judgment rather than pretending it happened."
   },
   {
     id: "custom",

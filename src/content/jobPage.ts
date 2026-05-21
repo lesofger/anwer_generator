@@ -29,6 +29,11 @@ const isUsableInput = (element: Element): element is HTMLInputElement | HTMLText
 
 const normalized = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim();
 
+const significantWords = (text: string) =>
+  Array.from(new Set(normalized(text).match(/[a-z0-9]{4,}/g) ?? [])).filter(
+    (word) => !["that", "this", "with", "your", "have", "from", "they", "will", "what", "when", "where", "would"].includes(word)
+  );
+
 const isVisible = (element: HTMLElement) => {
   const rect = element.getBoundingClientRect();
   const style = window.getComputedStyle(element);
@@ -158,12 +163,25 @@ const findQuestionElement = (questionText: string) => {
     return null;
   }
 
-  const questionSnippet = question.slice(0, 180);
-  const matches = Array.from(document.body.querySelectorAll<HTMLElement>("body *"))
+  const snippets = [
+    question.slice(0, 180),
+    question.slice(0, 120),
+    question.split(/[?.!]/)[0]?.slice(0, 120) ?? "",
+    significantWords(question)
+      .slice(0, 8)
+      .join(" ")
+  ].filter((snippet) => snippet.length >= 12);
+  const words = significantWords(question);
+  const matches = Array.from(document.body.querySelectorAll<HTMLElement>("label, legend, p, div, span, h1, h2, h3, h4, strong"))
     .filter(isVisible)
-    .map((element) => ({ element, text: normalized(element.innerText || element.textContent || "") }))
-    .filter(({ text }) => text.length >= 12 && (text.includes(questionSnippet) || question.includes(text)))
-    .sort((a, b) => a.text.length - b.text.length);
+    .map((element) => {
+      const text = normalized(element.innerText || element.textContent || "");
+      const wordHits = words.filter((word) => text.includes(word)).length;
+      const snippetHit = snippets.some((snippet) => text.includes(snippet) || snippet.includes(text));
+      return { element, text, score: (snippetHit ? 100 : 0) + wordHits };
+    })
+    .filter(({ text, score }) => text.length >= 8 && score >= Math.min(5, Math.max(2, Math.ceil(words.length * 0.45))))
+    .sort((a, b) => b.score - a.score || a.text.length - b.text.length);
 
   return matches[0]?.element ?? null;
 };
@@ -195,13 +213,39 @@ const insertAnswer = (answer: string, questionText?: string) => {
   const target = questionElement ? firstEditableAfter(questionElement) : lastEditable ?? document.activeElement;
 
   if (!isEditable(target)) {
-    void navigator.clipboard.writeText(answer);
-    return { ok: false, copied: true };
+    return { ok: false, copied: false };
   }
 
   fillEditable(target, answer);
   target.scrollIntoView({ behavior: "smooth", block: "center" });
   return { ok: true, copied: false };
+};
+
+const uploadCoverFile = (fileName: string, mimeType: string, base64: string) => {
+  const input = Array.from(document.querySelectorAll<HTMLInputElement>("input[type='file']"))
+    .filter(isVisible)
+    .find((candidate) => {
+      const text = normalized(
+        [candidate.accept, candidate.name, candidate.id, candidate.getAttribute("aria-label") ?? "", candidate.closest("label")?.textContent ?? ""].join(
+          " "
+        )
+      );
+      return !text || text.includes("doc") || text.includes("pdf") || text.includes("cover") || text.includes("resume") || text.includes("upload");
+    });
+
+  if (!input) {
+    return { ok: false };
+  }
+
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  const file = new File([bytes], fileName, { type: mimeType });
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  input.files = transfer.files;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.scrollIntoView({ behavior: "smooth", block: "center" });
+  return { ok: true };
 };
 
 document.addEventListener("mouseup", () => window.setTimeout(showBubble, 80));
@@ -214,10 +258,15 @@ document.addEventListener("mousedown", (event) => {
 });
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
-  if (message.type !== "INSERT_ANSWER") {
-    return undefined;
+  if (message.type === "INSERT_ANSWER") {
+    sendResponse(insertAnswer(message.answer, message.questionText));
+    return true;
   }
 
-  sendResponse(insertAnswer(message.answer, message.questionText));
-  return true;
+  if (message.type === "UPLOAD_COVER_FILE") {
+    sendResponse(uploadCoverFile(message.fileName, message.mimeType, message.base64));
+    return true;
+  }
+
+  return undefined;
 });

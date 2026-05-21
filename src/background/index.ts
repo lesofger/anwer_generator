@@ -19,6 +19,23 @@ const notifyPanel = async (patch: Partial<AppState>) => {
   await patchState(patch);
 };
 
+const focusTargetJobTab = async () => {
+  const state = await loadState();
+  if (!state.targetTabId) {
+    return;
+  }
+
+  try {
+    const tab = await chrome.tabs.get(state.targetTabId);
+    if (tab.windowId) {
+      await chrome.windows.update(tab.windowId, { focused: true });
+    }
+    await chrome.tabs.update(state.targetTabId, { active: true });
+  } catch {
+    // The original job tab may have been closed; generation should still succeed.
+  }
+};
+
 const findChatGptTab = async () => {
   const tabs = await chrome.tabs.query({});
   return tabs.find((tab) => tab.url && CHATGPT_MATCH.test(tab.url));
@@ -102,7 +119,7 @@ const extractJson = (text: string) => {
     throw new Error("No JSON object found in ChatGPT response.");
   }
 
-  return JSON.parse(candidate.slice(start, end + 1)) as { answers?: GeneratedAnswer[] };
+  return JSON.parse(candidate.slice(start, end + 1)) as { answers?: GeneratedAnswer[]; coverLetter?: string };
 };
 
 const generateAnswers = async (message: Extract<RuntimeMessage, { type: "GENERATE_ANSWERS" }>): Promise<GenerateResponse> => {
@@ -143,7 +160,13 @@ const generateAnswers = async (message: Extract<RuntimeMessage, { type: "GENERAT
       throw new Error("ChatGPT response JSON did not include an answers array.");
     }
 
-    return { ok: true, answers: parsed.answers, rawText: result.text, prompt };
+    await notifyPanel({
+      status: "done",
+      statusMessage: "Answers generated. Returning to job page..."
+    });
+    await focusTargetJobTab();
+
+    return { ok: true, answers: parsed.answers, coverLetter: parsed.coverLetter ?? "", rawText: result.text, prompt };
   } catch (error) {
     return {
       ok: false,

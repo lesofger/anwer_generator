@@ -28,6 +28,9 @@ export interface AppState {
   jobDescription: string;
   resumeText: string;
   includeResume: boolean;
+  generateCoverLetter: boolean;
+  coverLetterSentenceCount: number;
+  coverLetterText: string;
   useNewChatGptTab: boolean;
   targetTabId?: number;
   activeCaptureTabId?: number;
@@ -44,6 +47,8 @@ export interface GeneratePayload {
   jobDescription: string;
   resumeText: string;
   includeResume: boolean;
+  generateCoverLetter: boolean;
+  coverLetterSentenceCount: number;
   useNewChatGptTab: boolean;
   questions: JobQuestion[];
   templateId: PromptTemplateId;
@@ -59,6 +64,7 @@ export interface GeneratedAnswer {
 export interface GenerateResponse {
   ok: boolean;
   answers?: GeneratedAnswer[];
+  coverLetter?: string;
   rawText?: string;
   prompt?: string;
   error?: string;
@@ -94,6 +100,12 @@ export type RuntimeMessage =
       type: "INSERT_ANSWER";
       answer: string;
       questionText?: string;
+    }
+  | {
+      type: "UPLOAD_COVER_FILE";
+      fileName: string;
+      mimeType: string;
+      base64: string;
     };
 
 export const createId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

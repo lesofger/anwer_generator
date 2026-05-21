@@ -129,24 +129,26 @@ const submitPrompt = async (prompt: string) => {
   return waitForNewAssistantMessage(beforeCount);
 };
 
-if (!window.__jobAnswerHelperChatGptLoaded) {
-  window.__jobAnswerHelperChatGptLoaded = true;
-
-  chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
-    if (message.type !== "CHATGPT_SUBMIT_PROMPT") {
-      return undefined;
-    }
-
-    void submitPrompt(message.prompt)
-      .then((text) => sendResponse({ ok: true, text }))
-      .catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) }));
-
-    return true;
-  });
+if (window.__jobAnswerHelperChatGptListener) {
+  chrome.runtime.onMessage.removeListener(window.__jobAnswerHelperChatGptListener);
 }
+
+window.__jobAnswerHelperChatGptListener = (message: RuntimeMessage, _sender, sendResponse) => {
+  if (message.type !== "CHATGPT_SUBMIT_PROMPT") {
+    return undefined;
+  }
+
+  void submitPrompt(message.prompt)
+    .then((text) => sendResponse({ ok: true, text }))
+    .catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
+  return true;
+};
+
+chrome.runtime.onMessage.addListener(window.__jobAnswerHelperChatGptListener);
 
 declare global {
   interface Window {
-    __jobAnswerHelperChatGptLoaded?: boolean;
+    __jobAnswerHelperChatGptListener?: Parameters<typeof chrome.runtime.onMessage.addListener>[0];
   }
 }

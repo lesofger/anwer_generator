@@ -17,7 +17,7 @@ export const formatCoverLetterForDisplay = (coverLetter: string) => {
     .trim();
   const sentences = splitIntoSentences(cleaned);
 
-  return sentences.join("\n\n");
+  return ["Dear Hiring Team,", "", ...sentences, "", "I look forward to hearing from you.", "", "Best regards,"].join("\n\n");
 };
 
 export const createCoverLetterDocBlob = (coverLetter: string) => {

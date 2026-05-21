@@ -2,15 +2,9 @@
 
 Paul Meyer
 Senior Software Engineer – AI/ML Systems
-
-SUMMARY 
- 
-Experienced Senior AI/ML Engineer with over 10 years of expertise in machine learning, software engineering, data engineering, and AI-driven solutions within healthcare and enterprise environments. Proven track record in designing and deploying scalable AI workflows, including NLP systems, distributed applications, and data pipelines, leveraging Python, PyTorch, TensorFlow, and cloud platforms (AWS, Azure, GCP). Skilled in optimizing data processing, system performance, and operational efficiency, with a commitment to maintaining industry standards and ensuring compliance.
-
-EXPERIENCE
  
 Principal AI/ML Engineer
-Viz.AI | San Francisco, CA
+Viz.AI
 06/2024 – Present
 •	Led architecture and development of autonomous LLM agent systems using LangChain and LangGraph, AWS AgentCore with RAG architectures, enabling multi-step reasoning, tool use, and decision-making workflows for information retrieval, knowledge-grounded generation, and structured task automation across complex enterprise datasets.
 •	Integrate AI agents with enterprise systems via APIs and RPA-style interfaces (UI/DOM/vision-based interactions) to execute real-world operational tasks.
@@ -23,20 +17,14 @@ Viz.AI | San Francisco, CA
 •	Pioneered production-scale fallback system for Hybrid OCR Pipeline combining PaddleOCR with Claude Vision, achieving 97% accuracy via automated quality assessment and intelligent model selection for property record extraction.
  
 Senior Machine Learning Engineer 
-Box | Redwood City, CA
+Box
 11/2021 – 05/2024
 •	Engineered high-performance document processing pipeline for RAG applications, handling PDFs, images, HTML, and Word documents using PyTorch, computer vision models (YOLOX, YOLO-NAS, DetectronZ), and GPU – accelerated OCR, scaling to 100K+ documents daily with enterprise-grade reliability.
 •	Developed scalable Retrieval-Augmented Generation (RAG) systems for Box.AI to connect enterprise unstructured data with LLMs. Improved retrieval quality and inference efficiency through embedding model evaluation, vector database recall benchmarking, prompt engineering, and adaptive text chunking strategies.
-•	Evaluation of RAG systems is highly dependent on the context of the query and corpus. I implemented an evaluation set and testing framework for Box.AI that is more representative and diverse than the standard benchmark datasets. The queries and documents included are closer proxies in size and complexity to real customer use cases. This allowed the Box.AI team to more effectively prompt tune, examine throughput, debug corner cases, and performing regression tests when pushing changes.
 •	Trained and deployed a large-scale TensorFlow Ranking (TF-Ranking) model powering enterprise search relevance for 1+ years, delivering a +4% NDCG improvement across high-volume user search traffic.
-•	Optimized Apache Solr ranking and boost strategies to prioritize freshness-aware retrieval, increasing recall of recently updated content and improving Quick Search NDCG by over 5%.
-•	Implemented CI/CD MLOps workflows using Kubernetes and Docker, enabling automated model deployment and A/B testing across 15+ production environments.
-•	Streamlined infrastructure provisioning using Terraform, CloudFormation, and Ansible, implementing Python based automation and DevOps practices with infrastructure-as-code to reduce human errors by 60% across AWS and on-premise environments, deploying to Kubernetes.
-•	Mentored an internship initiative to redesign the search Query Spell Checker pipeline, achieving 99.7% recall improvement and boosting F1 score by 93% through advanced query correction and retrieval optimization techniques.
-•	Revamped the team’s data engineering infrastructure by migrating legacy ETL pipelines to Python 3 / PySpark and transitioning batch processing workflows to Google Cloud BigQuery + GCP, improving maintainability, scalability, and distributed data processing performance.
  
 Senior Software Engineer 
-American Airlines | Austin, TX
+American Airlines
 04/2019 - 10/2021
 •	Build and maintain GraphQL APIs that provide operations teams with a consolidated, real-time view of airline operational data across American Airlines’ global network.
 •	Architect high-throughput streaming data pipelines using Apache Kafka to ingest and process 500K events daily from multiple upstream systems. Designed resilient ingestion and transformation workflows to support near real-time operational visibility and analytics.

@@ -34,7 +34,6 @@ export interface AppState {
   generateCoverLetter: boolean;
   coverLetterSentenceCount: number;
   coverLetterText: string;
-  useNewChatGptTab: boolean;
   targetTabId?: number;
   activeCaptureTabId?: number;
   questions: JobQuestion[];
@@ -52,7 +51,6 @@ export interface GeneratePayload {
   includeResume: boolean;
   generateCoverLetter: boolean;
   coverLetterSentenceCount: number;
-  useNewChatGptTab: boolean;
   questions: JobQuestion[];
   templateId: PromptTemplateId;
   customPrompt: string;

@@ -129,11 +129,11 @@ const generateAnswers = async (message: Extract<RuntimeMessage, { type: "GENERAT
     await notifyPanel({
       latestPrompt: prompt,
       status: "opening-chatgpt",
-      statusMessage: "Opening ChatGPT...",
+      statusMessage: "Opening a new ChatGPT chat...",
       lastError: ""
     });
 
-    const tabId = await getOrCreateChatGptTab(message.payload.useNewChatGptTab);
+    const tabId = await getOrCreateChatGptTab(true);
     await injectChatGptAdapter(tabId);
 
     await notifyPanel({

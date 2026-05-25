@@ -15,7 +15,6 @@ export const defaultState: AppState = {
   generateCoverLetter: false,
   coverLetterSentenceCount: 5,
   coverLetterText: "",
-  useNewChatGptTab: false,
   questions: [],
   selectedTemplateId: "long",
   customPrompt: "",

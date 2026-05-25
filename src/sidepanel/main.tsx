@@ -75,7 +75,6 @@ const App = () => {
         includeResume: state.includeResume,
         generateCoverLetter: state.generateCoverLetter,
         coverLetterSentenceCount: state.coverLetterSentenceCount,
-        useNewChatGptTab: state.useNewChatGptTab,
         questions: state.questions,
         templateId: state.selectedTemplateId,
         customPrompt: state.customPrompt
@@ -88,8 +87,7 @@ const App = () => {
       state.includeResume,
       state.jobDescription,
       state.questions,
-      state.selectedTemplateId,
-      state.useNewChatGptTab
+      state.selectedTemplateId
     ]
   );
 
@@ -262,7 +260,6 @@ const App = () => {
       includeResume: state.includeResume,
       generateCoverLetter: state.generateCoverLetter,
       coverLetterSentenceCount: state.coverLetterSentenceCount,
-      useNewChatGptTab: state.useNewChatGptTab,
       questions: activeQuestions.map((question) => ({
         ...question,
         templateId: question.templateId ?? state.selectedTemplateId
@@ -276,7 +273,7 @@ const App = () => {
       ...state,
       latestPrompt,
       status: "opening-chatgpt",
-      statusMessage: "Opening ChatGPT...",
+      statusMessage: "Opening a new ChatGPT chat...",
       lastError: ""
     });
 
@@ -738,19 +735,10 @@ const App = () => {
       </section>
 
       <section className="card sticky-actions">
-        <div className="mode-card">
-          <label className="check-row">
-            <input
-              checked={state.useNewChatGptTab}
-              onChange={(event) => void setAndPersist({ ...state, useNewChatGptTab: event.target.checked })}
-              type="checkbox"
-            />
-            Start a new ChatGPT chat for generation
-          </label>
-        </div>
         <button className="primary" onClick={() => void generateAnswers()} type="button">
           Generate all answers
         </button>
+        <p className="muted generate-hint">Opens ChatGPT in a fresh chat for each run.</p>
         <p className={`status ${state.status}`}>{state.statusMessage}</p>
         {state.lastError ? <p className="error">{state.lastError}</p> : null}
       </section>

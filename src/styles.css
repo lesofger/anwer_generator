@@ -92,6 +92,38 @@ select {
   letter-spacing: -0.04em;
 }
 
+.top-action-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: rgba(248, 251, 255, 0.96);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  padding: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.toolbar-button {
+  padding: 8px 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.toolbar-button.active {
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.toolbar-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .eyebrow {
   margin: 0;
   color: #2563eb;

@@ -303,6 +303,13 @@ const App = () => {
         }
       }
 
+      const questionsWithGeneratedAnswers = state.questions.map((question) => {
+        const answer =
+          response.answers?.find((item) => item.questionId === question.id)?.answer ??
+          response.answers?.find((item) => item.question.trim() === question.text.trim())?.answer;
+        return answer ? { ...question, answer } : question;
+      });
+
       await setAndPersist((current) => ({
         ...current,
         latestPrompt: response.prompt ?? latestPrompt,
@@ -310,13 +317,12 @@ const App = () => {
         coverLetterText: response.coverLetter?.trim() ? formatCoverLetterForDisplay(response.coverLetter) : current.coverLetterText,
         statusMessage: response.coverLetter ? "Cover letter and answers generated." : "Answers generated.",
         lastError: "",
-        questions: current.questions.map((question) => {
-          const answer =
-            response.answers?.find((item) => item.questionId === question.id)?.answer ??
-            response.answers?.find((item) => item.question.trim() === question.text.trim())?.answer;
-          return answer ? { ...question, answer } : question;
-        })
+        questions: questionsWithGeneratedAnswers
       }));
+
+      if (questionsWithGeneratedAnswers.some((question) => question.answer)) {
+        await insertQuestionsIntoPage(questionsWithGeneratedAnswers, "auto");
+      }
     } catch (error) {
       await setAndPersist((current) => ({
         ...current,
@@ -372,6 +378,48 @@ const App = () => {
       questionText: question.text
     } satisfies RuntimeMessage) as Promise<{ ok: boolean; copied?: boolean }>;
 
+  const insertQuestionsIntoPage = async (questionsToInsert: JobQuestion[], mode: "manual" | "auto") => {
+    const answeredQuestions = questionsToInsert.filter((question) => question.answer);
+    const tabId = await getTargetTabId();
+
+    if (!tabId || answeredQuestions.length === 0) {
+      if (mode === "manual") {
+        await setAndPersist((current) => ({
+          ...current,
+          status: "failed",
+          statusMessage: "No target page or answers available for Insert all.",
+          lastError: "Open the job application page and make sure answers have been generated."
+        }));
+      }
+      return;
+    }
+
+    let insertedCount = 0;
+    for (const question of answeredQuestions) {
+      try {
+        const response = await sendAnswerToPage(tabId, question);
+        if (response?.ok) {
+          insertedCount += 1;
+        }
+      } catch {
+        // Keep trying remaining answers; the final status reports partial success.
+      }
+    }
+
+    await setAndPersist((current) => ({
+      ...current,
+      status: insertedCount === answeredQuestions.length ? "done" : "failed",
+      statusMessage:
+        insertedCount === answeredQuestions.length
+          ? `${mode === "auto" ? "Generated and inserted" : "Inserted"} all ${insertedCount} answers into the page.`
+          : `${mode === "auto" ? "Generated answers, then inserted" : "Inserted"} ${insertedCount} of ${answeredQuestions.length} answers.`,
+      lastError:
+        insertedCount === answeredQuestions.length
+          ? ""
+          : "Some fields could not be matched. Try inserting those answers one by one."
+    }));
+  };
+
   const uploadCoverDocToPage = async (coverLetter = state.coverLetterText) => {
     const tabId = await getTargetTabId();
     if (!tabId || !coverLetter.trim()) {
@@ -421,43 +469,7 @@ const App = () => {
   };
 
   const insertAllAnswers = async () => {
-    const answeredQuestions = state.questions.filter((question) => question.answer);
-    const tabId = await getTargetTabId();
-
-    if (!tabId || answeredQuestions.length === 0) {
-      await setAndPersist((current) => ({
-        ...current,
-        status: "failed",
-        statusMessage: "No target page or answers available for Insert all.",
-        lastError: "Open the job application page and make sure answers have been generated."
-      }));
-      return;
-    }
-
-    let insertedCount = 0;
-    for (const question of answeredQuestions) {
-      try {
-        const response = await sendAnswerToPage(tabId, question);
-        if (response?.ok) {
-          insertedCount += 1;
-        }
-      } catch {
-        // Keep trying remaining answers; the final status reports partial success.
-      }
-    }
-
-    await setAndPersist((current) => ({
-      ...current,
-      status: insertedCount === answeredQuestions.length ? "done" : "failed",
-      statusMessage:
-        insertedCount === answeredQuestions.length
-          ? `Inserted all ${insertedCount} answers into the page.`
-          : `Inserted ${insertedCount} of ${answeredQuestions.length} answers.`,
-      lastError:
-        insertedCount === answeredQuestions.length
-          ? ""
-          : "Some fields could not be matched. Try inserting those answers one by one."
-    }));
+    await insertQuestionsIntoPage(state.questions, "manual");
   };
 
   const applyGeneratedContent = async (answers: GeneratedAnswer[], coverLetter: string, successMessage: string) => {
@@ -519,20 +531,23 @@ const App = () => {
           <p className="eyebrow">Job Answer Helper</p>
           <h1>Draft tailored answers from a job post.</h1>
         </div>
-        <button className="ghost" onClick={clearAll} type="button">
-          Reset
-        </button>
       </header>
 
-      <section className={currentTabActive ? "activation-compact active" : "activation-compact"}>
-        {currentJobTabId ? (
-          <label className="check-row">
-            <input checked={currentTabActive} onChange={(event) => toggleCurrentTabActivation(event.target.checked)} type="checkbox" />
-            Capture on this job page
-          </label>
-        ) : (
-          <p className="muted">Open job page to activate capture.</p>
-        )}
+      <section className="top-action-bar">
+        <button
+          className={currentTabActive ? "toolbar-button active" : "toolbar-button"}
+          disabled={!currentJobTabId}
+          onClick={() => toggleCurrentTabActivation(!currentTabActive)}
+          type="button"
+        >
+          {currentTabActive ? "Capture on" : "Capture off"}
+        </button>
+        <button className="toolbar-button" onClick={clearAll} type="button">
+          Reset
+        </button>
+        <button className="toolbar-button" onClick={() => void insertAllAnswers()} type="button">
+          Insert all
+        </button>
       </section>
 
       <section className="card">
@@ -738,7 +753,6 @@ const App = () => {
         <button className="primary" onClick={() => void generateAnswers()} type="button">
           Generate all answers
         </button>
-        <p className="muted generate-hint">Opens ChatGPT in a fresh chat for each run.</p>
         <p className={`status ${state.status}`}>{state.statusMessage}</p>
         {state.lastError ? <p className="error">{state.lastError}</p> : null}
       </section>
@@ -788,13 +802,7 @@ const App = () => {
       <section className="card">
         <div className="section-title">
           <h2>Answer workspace</h2>
-          {state.questions.some((question) => question.answer) ? (
-            <button onClick={() => void insertAllAnswers()} type="button">
-              Insert all
-            </button>
-          ) : (
-            <span>{state.questions.filter((question) => question.answer).length} ready</span>
-          )}
+          <span>{state.questions.filter((question) => question.answer).length} ready</span>
         </div>
         {state.questions.some((question) => question.answer) ? (
           <div className="answer-list">

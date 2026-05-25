@@ -1,12 +1,16 @@
 import type { AppState, PromptTemplateId } from "./messages";
+import { emptyResumes, type ResumeId } from "./resumes";
 
 const STORAGE_KEY = "jobAnswerHelperState";
 const isTemplateId = (value: unknown): value is PromptTemplateId =>
   value === "short" || value === "long" || value === "longTechnical" || value === "custom";
 
+const isResumeId = (value: unknown): value is ResumeId => value === "1" || value === "2" || value === "3";
+
 export const defaultState: AppState = {
   jobDescription: "",
-  resumeText: "",
+  selectedResumeId: "1",
+  resumes: emptyResumes(),
   includeResume: false,
   generateCoverLetter: false,
   coverLetterSentenceCount: 5,
@@ -23,10 +27,19 @@ export const defaultState: AppState = {
 
 export const normalizeState = (saved: Partial<AppState> | undefined): AppState => {
   const selectedTemplateId = saved?.selectedTemplateId;
+  const selectedResumeId = saved?.selectedResumeId;
+  const legacyResumeText = (saved as { resumeText?: string } | undefined)?.resumeText;
+  const resumes = { ...emptyResumes(), ...saved?.resumes };
+
+  if (legacyResumeText?.trim() && !resumes["1"].trim()) {
+    resumes["1"] = legacyResumeText;
+  }
 
   return {
     ...defaultState,
     ...saved,
+    selectedResumeId: isResumeId(selectedResumeId) ? selectedResumeId : defaultState.selectedResumeId,
+    resumes,
     selectedTemplateId: isTemplateId(selectedTemplateId) ? selectedTemplateId : defaultState.selectedTemplateId,
     questions:
       saved?.questions?.map((question) => ({

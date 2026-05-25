@@ -14,8 +14,11 @@ export default defineConfig({
         const rootManifest = readFileSync(resolve(__dirname, "manifest.json"), "utf8");
         const distManifest = rootManifest.replaceAll('"dist/', '"');
         writeFileSync(resolve(__dirname, "dist/manifest.json"), distManifest);
-        if (existsSync(resolve(__dirname, "resume.md"))) {
-          copyFileSync(resolve(__dirname, "resume.md"), resolve(__dirname, "dist/resume.md"));
+        for (const resumeFile of ["resume.md", "resume-2.md", "resume-3.md"]) {
+          const sourcePath = resolve(__dirname, resumeFile);
+          if (existsSync(sourcePath)) {
+            copyFileSync(sourcePath, resolve(__dirname, "dist", resumeFile));
+          }
         }
       }
     }

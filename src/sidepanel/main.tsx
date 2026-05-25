@@ -4,6 +4,12 @@ import { createCoverLetterDocBlob, formatCoverLetterForDisplay } from "../lib/do
 import { buildPrompt } from "../lib/promptBuilder";
 import { promptTemplates } from "../lib/promptTemplates";
 import { defaultState, loadState, normalizeState, saveState } from "../lib/storage";
+import {
+  getActiveResumeText,
+  getResumeSlot,
+  resumeSlots,
+  type ResumeId
+} from "../lib/resumes";
 import type { AppState, GeneratedAnswer, GenerateResponse, JobQuestion, RuntimeMessage } from "../lib/messages";
 import { createId } from "../lib/messages";
 import "../styles.css";
@@ -59,11 +65,13 @@ const App = () => {
   const [showFallback, setShowFallback] = useState(false);
   const [currentJobTabId, setCurrentJobTabId] = useState<number | undefined>();
 
+  const activeResumeText = getActiveResumeText(state.resumes, state.selectedResumeId);
+
   const draftPrompt = useMemo(
     () =>
       buildPrompt({
         jobDescription: state.jobDescription,
-        resumeText: state.resumeText,
+        resumeText: activeResumeText,
         includeResume: state.includeResume,
         generateCoverLetter: state.generateCoverLetter,
         coverLetterSentenceCount: state.coverLetterSentenceCount,
@@ -76,10 +84,10 @@ const App = () => {
       state.customPrompt,
       state.coverLetterSentenceCount,
       state.generateCoverLetter,
+      activeResumeText,
       state.includeResume,
       state.jobDescription,
       state.questions,
-      state.resumeText,
       state.selectedTemplateId,
       state.useNewChatGptTab
     ]
@@ -93,36 +101,71 @@ const App = () => {
     });
   };
 
-  const loadResumeMarkdown = async (baseState?: AppState) => {
+  const loadResumeFromFile = async (resumeId: ResumeId, baseState?: AppState) => {
     const stateForSave = baseState ?? state;
+    const slot = getResumeSlot(resumeId);
+
     try {
-      const response = await fetch(chrome.runtime.getURL("resume.md"));
+      const response = await fetch(chrome.runtime.getURL(slot.fileName));
       if (!response.ok) {
-        throw new Error("resume.md was not found in the extension folder.");
+        throw new Error(`${slot.fileName} was not found in the extension folder.`);
       }
 
       const resumeText = await response.text();
       await setAndPersist({
         ...stateForSave,
-        resumeText,
+        resumes: { ...stateForSave.resumes, [resumeId]: resumeText },
         includeResume: true,
-        statusMessage: "Loaded resume.md."
+        statusMessage: `Loaded ${slot.fileName} into ${slot.label}.`
       });
     } catch (error) {
       await setAndPersist({
         ...stateForSave,
         status: "failed",
-        statusMessage: "Could not load resume.md.",
+        statusMessage: `Could not load ${slot.fileName}.`,
         lastError: error instanceof Error ? error.message : String(error)
       });
     }
+  };
+
+  const loadAllResumesFromFiles = async (baseState: AppState) => {
+    const resumes = { ...baseState.resumes };
+    let loadedCount = 0;
+
+    for (const slot of resumeSlots) {
+      try {
+        const response = await fetch(chrome.runtime.getURL(slot.fileName));
+        if (!response.ok) {
+          continue;
+        }
+
+        const resumeText = await response.text();
+        if (resumeText.trim()) {
+          resumes[slot.id] = resumeText;
+          loadedCount += 1;
+        }
+      } catch {
+        // Missing optional resume files are fine.
+      }
+    }
+
+    if (loadedCount === 0) {
+      return;
+    }
+
+    await setAndPersist({
+      ...baseState,
+      resumes,
+      includeResume: true,
+      statusMessage: `Loaded ${loadedCount} resume file${loadedCount === 1 ? "" : "s"}.`
+    });
   };
 
   useEffect(() => {
     void loadState().then((savedState) => {
       setState(savedState);
       setLoading(false);
-      void loadResumeMarkdown(savedState);
+      void loadAllResumesFromFiles(savedState);
     });
 
     const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
@@ -215,7 +258,7 @@ const App = () => {
 
     const payload = {
       jobDescription: state.jobDescription,
-      resumeText: state.resumeText,
+      resumeText: activeResumeText,
       includeResume: state.includeResume,
       generateCoverLetter: state.generateCoverLetter,
       coverLetterSentenceCount: state.coverLetterSentenceCount,
@@ -511,10 +554,25 @@ const App = () => {
       <section className="card">
         <div className="section-title">
           <h2>Resume</h2>
-          <button onClick={() => void loadResumeMarkdown()} type="button">
-            Reload resume.md
+          <button onClick={() => void loadResumeFromFile(state.selectedResumeId)} type="button">
+            Reload file
           </button>
         </div>
+        <label className="field-label">
+          Active resume
+          <select
+            value={state.selectedResumeId}
+            onChange={(event) =>
+              void setAndPersist({ ...state, selectedResumeId: event.target.value as ResumeId })
+            }
+          >
+            {resumeSlots.map((slot) => (
+              <option key={slot.id} value={slot.id}>
+                {slot.label} ({slot.fileName})
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="check-row">
           <input
             checked={state.includeResume}
@@ -524,9 +582,14 @@ const App = () => {
           Include resume in generated prompts
         </label>
         <textarea
-          value={state.resumeText}
-          onChange={(event) => void setAndPersist({ ...state, resumeText: event.target.value })}
-          placeholder="Paste your resume here, or put it in resume.md and click Load resume.md."
+          value={activeResumeText}
+          onChange={(event) =>
+            void setAndPersist((current) => ({
+              ...current,
+              resumes: { ...current.resumes, [current.selectedResumeId]: event.target.value }
+            }))
+          }
+          placeholder={`Paste your resume here, or edit ${getResumeSlot(state.selectedResumeId).fileName} and click Reload file.`}
           rows={6}
         />
       </section>

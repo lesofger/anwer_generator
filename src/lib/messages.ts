@@ -1,3 +1,5 @@
+import type { ResumeId } from "./resumes";
+
 export type CaptureKind = "jobDescription" | "question";
 
 export type PromptTemplateId = "short" | "long" | "longTechnical" | "custom";
@@ -26,7 +28,8 @@ export interface PromptTemplate {
 
 export interface AppState {
   jobDescription: string;
-  resumeText: string;
+  selectedResumeId: ResumeId;
+  resumes: Record<ResumeId, string>;
   includeResume: boolean;
   generateCoverLetter: boolean;
   coverLetterSentenceCount: number;

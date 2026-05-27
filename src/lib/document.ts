@@ -1,13 +1,22 @@
 const escapeHtml = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-const splitIntoSentences = (text: string) =>
-  text
+const protectedDot = "__JOB_HELPER_DOT__";
+
+const splitIntoSentences = (text: string) => {
+  const protectedText = text
     .replace(/\s+/g, " ")
     .trim()
+    .replace(/([A-Za-z])\.([A-Za-z])/g, `$1${protectedDot}$2`)
+    .replace(/\b(U|S|E|G|I|A)\./g, `$1${protectedDot}`);
+
+  return (
+    protectedText
     .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
-    ?.map((sentence) => sentence.trim())
-    .filter(Boolean) ?? [];
+      ?.map((sentence) => sentence.replaceAll(protectedDot, ".").trim())
+      .filter(Boolean) ?? []
+  );
+};
 
 export const formatCoverLetterForDisplay = (coverLetter: string) => {
   const cleaned = coverLetter

@@ -38,6 +38,8 @@ export const buildPrompt = ({
     "You are helping draft answers for a job application.",
     "Use only the provided job description, optional resume, and questions. Do not invent employers, metrics, tools, or projects.",
     "When supported by the source material, make answers specific with projects, architectures, tools, measurable impact, reliability, explainability, safety, and business trust.",
+    "For questions asking about a specific tool or technology, claim direct experience when that exact tool or a clearly equivalent item appears in the provided context.",
+    "If the exact tool is not present, do not lead with a negative statement like 'I do not have direct experience'. Instead, answer constructively by describing sure I have experience with that exact tool or a clearly equivalent item in a way that is relevant to the question and the role. You can be creative and use your imagination to be suitable for the previous company roles.",
     "",
     "Return only valid JSON. Do not wrap the JSON in markdown.",
     "The JSON shape must be:",

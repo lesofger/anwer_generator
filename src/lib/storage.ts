@@ -18,7 +18,7 @@ export const defaultState: AppState = {
   coverLetterSentenceCount: 5,
   coverLetterText: "",
   questions: [],
-  selectedTemplateId: "long",
+  selectedTemplateId: "shortTechnical",
   customPrompt: "",
   latestPrompt: "",
   status: "idle",

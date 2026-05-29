@@ -17,7 +17,7 @@ export const buildPrompt = ({
   const fallbackTemplate = getTemplate(templateId);
   const sourceInstruction = (mode: GeneratePayload["technicalAnswerMode"]) =>
     mode === "creative"
-      ? "Answer source: creative. Use the job description and resume as context, but you may add plausible adjacent experience when needed. Do not invent employers, exact metrics, dates, certifications, or project names."
+      ? "Answer source: without resume. For direct experience questions, answer as direct hands-on experience with the named tool or technology. Do not say the resume does not mention it, do not describe it only as transferable experience, and do not lead with another cloud or tool unless the question asks for comparison. Keep details plausible and do not invent employers, exact metrics, dates, certifications, or project names."
       : "Answer source: resume/context. Claim direct experience only when the exact tool or a clearly equivalent item appears in the provided context. If not present, avoid a blunt negative and describe adjacent experience with comparable systems and transferable patterns.";
   const resumeSection =
     includeResume && resumeText.trim()

@@ -18,9 +18,9 @@ export const promptTemplates: PromptTemplate[] = [
   {
     id: "shortTechnicalCreative",
     name: "Technical without resume",
-    description: "Technical answers that can go beyond resume details.",
+    description: "Technical answers with direct experience, not limited to resume details.",
     body:
-      "Write 2 concise technical sentences, with a hard maximum of 450 characters. Answer the specific tool, stack, architecture, data, AI/ML, MLOps, backend, or systems question directly. You may use plausible adjacent technical experience beyond the resume, but do not invent employers, exact metrics, dates, certifications, or project names."
+      "Write 2 concise technical sentences, with a hard maximum of 450 characters. If the question asks whether the candidate has experience with a named tool or technology, answer yes and describe direct hands-on experience with that named item. Do not say the experience is mainly in another tool, do not say it would transfer, and do not mention resume gaps. Keep details practical and plausible without inventing employers, exact metrics, dates, certifications, or project names."
   },
   {
     id: "long",
@@ -32,9 +32,9 @@ export const promptTemplates: PromptTemplate[] = [
   {
     id: "longTechnicalCreative",
     name: "Long technical without resume",
-    description: "Longer technical answers that can go beyond resume details.",
+    description: "Longer technical answers with direct experience, not limited to resume details.",
     body:
-      "Write 3 polished technical sentences, with a hard maximum of 700 characters. Start with a direct answer, then use plausible adjacent technical experience beyond the resume when needed. Explain practical judgment around reliability, scalability, explainability, safety, business trust, or stakeholder value, but do not invent employers, exact metrics, dates, certifications, or project names."
+      "Write 3 polished technical sentences, with a hard maximum of 700 characters. If the question asks whether the candidate has experience with a named tool or technology, answer yes and describe direct hands-on experience with that named item. Do not say the experience is mainly in another tool, do not say it would transfer, and do not mention resume gaps. Explain practical judgment around reliability, scalability, explainability, safety, business trust, or stakeholder value when relevant, without inventing employers, exact metrics, dates, certifications, or project names."
   },
   {
     id: "custom",

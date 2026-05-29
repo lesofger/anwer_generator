@@ -2,7 +2,14 @@ import type { ResumeId } from "./resumes";
 
 export type CaptureKind = "jobDescription" | "question";
 
-export type PromptTemplateId = "short" | "long" | "shortTechnical" | "custom";
+export type PromptTemplateId =
+  | "short"
+  | "shortTechnical"
+  | "shortTechnicalCreative"
+  | "long"
+  | "longTechnicalCreative"
+  | "custom";
+export type TechnicalAnswerMode = "resume" | "creative";
 
 export type GenerationStatus =
   | "idle"
@@ -16,6 +23,7 @@ export interface JobQuestion {
   id: string;
   text: string;
   templateId?: PromptTemplateId;
+  technicalAnswerMode?: TechnicalAnswerMode;
   answer?: string;
 }
 
@@ -38,6 +46,7 @@ export interface AppState {
   activeCaptureTabId?: number;
   questions: JobQuestion[];
   selectedTemplateId: PromptTemplateId;
+  technicalAnswerMode: TechnicalAnswerMode;
   customPrompt: string;
   latestPrompt: string;
   status: GenerationStatus;
@@ -53,6 +62,7 @@ export interface GeneratePayload {
   coverLetterSentenceCount: number;
   questions: JobQuestion[];
   templateId: PromptTemplateId;
+  technicalAnswerMode: TechnicalAnswerMode;
   customPrompt: string;
 }
 

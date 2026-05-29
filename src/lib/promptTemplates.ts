@@ -11,16 +11,30 @@ export const promptTemplates: PromptTemplate[] = [
   {
     id: "shortTechnical",
     name: "Technical",
-    description: "Technical answers for tool, stack, architecture, or systems questions.",
+    description: "Technical answers based on resume and job context.",
     body:
-      "Write 3 to 4 polished technical sentences. Answer the specific tool, stack, architecture, data, AI/ML, MLOps, backend, or systems question directly. Ground the answer in the strongest relevant project, system, tool, architecture, workflow, or impact from the provided context. For named technologies that are not supported, do not claim direct use; instead connect adjacent experience with comparable systems and explain how it transfers."
+      "Write 2 concise technical sentences, with a hard maximum of 450 characters. Answer the specific tool, stack, architecture, data, AI/ML, MLOps, backend, or systems question directly. Base the answer on the resume and job context. Include one concrete project, system, tool, architecture, workflow, or impact point when available."
+  },
+  {
+    id: "shortTechnicalCreative",
+    name: "Technical without resume",
+    description: "Technical answers that can go beyond resume details.",
+    body:
+      "Write 2 concise technical sentences, with a hard maximum of 450 characters. Answer the specific tool, stack, architecture, data, AI/ML, MLOps, backend, or systems question directly. You may use plausible adjacent technical experience beyond the resume, but do not invent employers, exact metrics, dates, certifications, or project names."
   },
   {
     id: "long",
     name: "Long technical",
-    description: "Substantial technical answers grounded in relevant experience and impact.",
+    description: "Longer technical answers based on resume and job context.",
     body:
-      "Write 4 to 6 polished sentences. Start with a direct answer that clearly addresses the question and mirrors the role's needs. Ground the answer in the candidate's most relevant resume evidence, such as specific projects, systems, tools, architectures, AI/ML workflows, backend work, full-stack work, or measurable impact when supported. For specific tool questions, claim exact tool experience only when supported; otherwise frame adjacent experience with comparable data systems, cloud services, distributed systems, retrieval, analytics, infrastructure, or backend architecture in a confident but honest way. Explain practical judgment around reliability, scalability, explainability, safety, business trust, or stakeholder value. Keep it concrete, human, and senior-engineer-like, without inventing experience or repeating the same point."
+      "Write 3 polished technical sentences, with a hard maximum of 700 characters. Start with a direct answer, then ground it in the most relevant project, system, tool, architecture, workflow, or impact from the resume and job context. Explain practical judgment around reliability, scalability, explainability, safety, business trust, or stakeholder value only when relevant."
+  },
+  {
+    id: "longTechnicalCreative",
+    name: "Long technical without resume",
+    description: "Longer technical answers that can go beyond resume details.",
+    body:
+      "Write 3 polished technical sentences, with a hard maximum of 700 characters. Start with a direct answer, then use plausible adjacent technical experience beyond the resume when needed. Explain practical judgment around reliability, scalability, explainability, safety, business trust, or stakeholder value, but do not invent employers, exact metrics, dates, certifications, or project names."
   },
   {
     id: "custom",

@@ -1,5 +1,7 @@
 import { getTemplate } from "./promptTemplates";
-import type { GeneratePayload } from "./messages";
+import type { GeneratePayload, PromptTemplateId } from "./messages";
+
+const creativeTemplateIds = new Set<PromptTemplateId>(["shortTechnicalCreative", "longTechnicalCreative"]);
 
 export const buildPrompt = ({
   jobDescription,
@@ -9,9 +11,14 @@ export const buildPrompt = ({
   coverLetterSentenceCount,
   questions,
   templateId,
+  technicalAnswerMode,
   customPrompt
 }: GeneratePayload) => {
   const fallbackTemplate = getTemplate(templateId);
+  const sourceInstruction = (mode: GeneratePayload["technicalAnswerMode"]) =>
+    mode === "creative"
+      ? "Answer source: creative. Use the job description and resume as context, but you may add plausible adjacent experience when needed. Do not invent employers, exact metrics, dates, certifications, or project names."
+      : "Answer source: resume/context. Claim direct experience only when the exact tool or a clearly equivalent item appears in the provided context. If not present, avoid a blunt negative and describe adjacent experience with comparable systems and transferable patterns.";
   const resumeSection =
     includeResume && resumeText.trim()
       ? ["", "Resume:", resumeText.trim()]
@@ -20,9 +27,15 @@ export const buildPrompt = ({
     .map((question, index) => {
       const template = getTemplate(question.templateId ?? fallbackTemplate.id);
       const instructions = template.id === "custom" ? customPrompt.trim() : template.body;
+      const answerSourceMode = creativeTemplateIds.has(template.id)
+        ? "creative"
+        : template.id === "custom"
+          ? technicalAnswerMode
+          : "resume";
       return [
         `${index + 1}. [${question.id}] ${question.text.trim()}`,
         `Template: ${template.name}`,
+        sourceInstruction(answerSourceMode),
         `Instructions: ${instructions || "Write clear, honest, role-specific answers in a professional tone."}`
       ].join("\n");
     })
@@ -36,11 +49,9 @@ export const buildPrompt = ({
 
   return [
     "You are helping draft answers for a job application.",
-    "Use only the provided job description, optional resume, and questions. Do not invent employers, metrics, tools, or projects.",
+    "Use the provided job description, optional resume, questions, and each question's answer source instruction.",
+    "Do not invent employers, exact metrics, dates, certifications, or project names.",
     "When supported by the source material, make answers specific with projects, architectures, tools, measurable impact, reliability, explainability, safety, and business trust.",
-    "For questions asking about a specific tool or technology, claim direct experience only when that exact tool or a clearly equivalent item appears in the provided context.",
-    "If the exact tool is not present, do not lead with a negative statement like 'I do not have direct experience'. Instead, answer constructively by describing adjacent experience with comparable systems, the underlying engineering patterns, and how that experience would transfer.",
-    "Never falsely say the candidate has used a named tool that is not supported by the provided context.",
     "",
     "Return only valid JSON. Do not wrap the JSON in markdown.",
     "The JSON shape must be:",

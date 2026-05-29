@@ -191,7 +191,15 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
           : {
               ...current,
               targetTabId: sender.tab?.id,
-              questions: [...current.questions, { id: createId(), text: message.text, templateId: current.selectedTemplateId }],
+              questions: [
+                ...current.questions,
+                {
+                  id: createId(),
+                  text: message.text,
+                  templateId: current.selectedTemplateId,
+                  technicalAnswerMode: current.technicalAnswerMode
+                }
+              ],
               statusMessage: "Question added."
             };
 

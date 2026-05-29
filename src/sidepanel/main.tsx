@@ -77,6 +77,7 @@ const App = () => {
         coverLetterSentenceCount: state.coverLetterSentenceCount,
         questions: state.questions,
         templateId: state.selectedTemplateId,
+        technicalAnswerMode: state.technicalAnswerMode,
         customPrompt: state.customPrompt
       }),
     [
@@ -87,7 +88,8 @@ const App = () => {
       state.includeResume,
       state.jobDescription,
       state.questions,
-      state.selectedTemplateId
+      state.selectedTemplateId,
+      state.technicalAnswerMode
     ]
   );
 
@@ -196,7 +198,15 @@ const App = () => {
   const addQuestion = () => {
     void setAndPersist((current) => ({
       ...current,
-      questions: [...current.questions, { id: createId(), text: "", templateId: current.selectedTemplateId }]
+      questions: [
+        ...current.questions,
+        {
+          id: createId(),
+          text: "",
+          templateId: current.selectedTemplateId,
+          technicalAnswerMode: current.technicalAnswerMode
+        }
+      ]
     }));
   };
 
@@ -262,9 +272,11 @@ const App = () => {
       coverLetterSentenceCount: state.coverLetterSentenceCount,
       questions: activeQuestions.map((question) => ({
         ...question,
-        templateId: question.templateId ?? state.selectedTemplateId
+        templateId: question.templateId ?? state.selectedTemplateId,
+        technicalAnswerMode: question.technicalAnswerMode ?? state.technicalAnswerMode
       })),
       templateId: state.selectedTemplateId,
+      technicalAnswerMode: state.technicalAnswerMode,
       customPrompt: state.customPrompt
     };
     const latestPrompt = buildPrompt(payload);

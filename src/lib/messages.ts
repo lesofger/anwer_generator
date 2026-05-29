@@ -2,7 +2,7 @@ import type { ResumeId } from "./resumes";
 
 export type CaptureKind = "jobDescription" | "question";
 
-export type PromptTemplateId = "short" | "long" | "longTechnical" | "custom";
+export type PromptTemplateId = "short" | "long" | "shortTechnical" | "custom";
 
 export type GenerationStatus =
   | "idle"

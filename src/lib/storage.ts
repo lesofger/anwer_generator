@@ -3,7 +3,9 @@ import { emptyResumes, type ResumeId } from "./resumes";
 
 const STORAGE_KEY = "jobAnswerHelperState";
 const isTemplateId = (value: unknown): value is PromptTemplateId =>
-  value === "short" || value === "long" || value === "longTechnical" || value === "custom";
+  value === "short" || value === "long" || value === "shortTechnical" || value === "custom";
+const normalizeTemplateId = (value: unknown): PromptTemplateId =>
+  value === "longTechnical" ? "long" : isTemplateId(value) ? value : defaultState.selectedTemplateId;
 
 const isResumeId = (value: unknown): value is ResumeId => value === "1" || value === "2" || value === "3";
 
@@ -39,11 +41,11 @@ export const normalizeState = (saved: Partial<AppState> | undefined): AppState =
     ...saved,
     selectedResumeId: isResumeId(selectedResumeId) ? selectedResumeId : defaultState.selectedResumeId,
     resumes,
-    selectedTemplateId: isTemplateId(selectedTemplateId) ? selectedTemplateId : defaultState.selectedTemplateId,
+    selectedTemplateId: normalizeTemplateId(selectedTemplateId),
     questions:
       saved?.questions?.map((question) => ({
         ...question,
-        templateId: isTemplateId(question.templateId) ? question.templateId : defaultState.selectedTemplateId
+        templateId: normalizeTemplateId(question.templateId)
       })) ?? defaultState.questions
   };
 };

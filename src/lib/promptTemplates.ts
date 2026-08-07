@@ -4,9 +4,9 @@ export const promptTemplates: PromptTemplate[] = [
   {
     id: "short",
     name: "Behavioral",
-    description: "Role-fit and behavioral answers in a natural, professional tone.",
+    description: "Short role-fit and behavioral answers in a natural tone.",
     body:
-      "Write 3 to 4 polished sentences. Use this for general, motivation, fit, communication, collaboration, ownership, or behavioral questions. Answer naturally and directly, connecting the candidate's experience to the role without forcing technical projects, architecture, tools, metrics, reliability, explainability, or safety unless the question clearly asks for them. Keep it specific, thoughtful, and professional, without filler, exaggeration, or generic enthusiasm."
+      "Write 2 concise sentences, with a hard maximum of 350 characters. Use this for general, motivation, fit, communication, collaboration, ownership, or behavioral questions. Answer naturally and directly, connecting the candidate's experience to the role without forcing technical details unless the question asks for them. Avoid filler, exaggeration, and generic enthusiasm."
   },
   {
     id: "shortTechnical",

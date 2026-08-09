@@ -4,10 +4,13 @@ const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve
 
 const findPromptBox = (): HTMLElement | null => {
   const selectors = [
+    'form[data-type="unified-composer"] #prompt-textarea[contenteditable="true"]',
+    "#prompt-textarea.ProseMirror[contenteditable='true']",
+    "#prompt-textarea[contenteditable='true']",
+    "[data-testid='prompt-textarea'][contenteditable='true']",
     "textarea[data-testid='prompt-textarea']",
     "textarea#prompt-textarea",
-    "div[contenteditable='true'][data-testid='prompt-textarea']",
-    "div[contenteditable='true']"
+    "div[contenteditable='true'][data-testid='prompt-textarea']"
   ];
 
   for (const selector of selectors) {
@@ -24,12 +27,13 @@ const findSubmitButton = (): HTMLButtonElement | null => {
   const selectors = [
     "button[data-testid='send-button']",
     "button[aria-label='Send prompt']",
-    "button[aria-label='Send message']"
+    "button[aria-label='Send message']",
+    "button[aria-label*='Send']"
   ];
 
   for (const selector of selectors) {
     const button = document.querySelector<HTMLButtonElement>(selector);
-    if (button && !button.disabled) {
+    if (button && !button.disabled && button.getAttribute("aria-disabled") !== "true") {
       return button;
     }
   }
@@ -37,9 +41,25 @@ const findSubmitButton = (): HTMLButtonElement | null => {
   return null;
 };
 
+const isGenerating = () => {
+  if (document.querySelector("button[data-testid='stop-button']")) {
+    return true;
+  }
+
+  if (document.querySelector(".result-streaming[aria-busy='true'], [data-testid*='thinking'], [data-testid*='reasoning']")) {
+    return true;
+  }
+
+  return Array.from(document.querySelectorAll<HTMLButtonElement>("button")).some((button) => {
+    const label = `${button.getAttribute("aria-label") ?? ""} ${button.innerText ?? ""}`.toLowerCase();
+    return /stop|stopping/.test(label) && !button.disabled;
+  });
+};
+
 const getAssistantMessages = () => {
   const selectors = [
     "[data-message-author-role='assistant']",
+    "section[data-turn='assistant'][data-testid^='conversation-turn-']",
     "[data-testid*='conversation-turn'] [markdown]",
     ".markdown"
   ];
@@ -60,13 +80,30 @@ const setPromptText = (box: HTMLElement, prompt: string) => {
   box.focus();
 
   if (box instanceof HTMLTextAreaElement) {
-    box.value = prompt;
+    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    if (nativeSetter) {
+      nativeSetter.call(box, prompt);
+    } else {
+      box.value = prompt;
+    }
     box.dispatchEvent(new Event("input", { bubbles: true }));
     return;
   }
 
-  box.textContent = prompt;
-  box.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: prompt }));
+  // Current ChatGPT composer is a ProseMirror contenteditable (#prompt-textarea).
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(box);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
+  const inserted = document.execCommand("insertText", false, prompt);
+  const accepted = (box.innerText ?? "").trim().length > 0;
+
+  if (!inserted || !accepted) {
+    box.textContent = prompt;
+    box.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: prompt }));
+  }
 };
 
 const waitForPromptBox = async () => {
@@ -109,7 +146,7 @@ const waitForNewAssistantMessage = async (previousCount: number) => {
         stableTicks = 0;
       }
 
-      if (stableTicks >= 6 && !document.querySelector("button[data-testid='stop-button']")) {
+      if (stableTicks >= 6 && !isGenerating()) {
         return latest;
       }
     }
@@ -124,6 +161,7 @@ const submitPrompt = async (prompt: string) => {
   const beforeCount = getAssistantMessages().length;
   const box = await waitForPromptBox();
   setPromptText(box, prompt);
+  await sleep(100);
   const button = await waitForSendButton();
   button.click();
   return waitForNewAssistantMessage(beforeCount);

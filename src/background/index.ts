@@ -36,9 +36,22 @@ const focusTargetJobTab = async () => {
   }
 };
 
+const isChatGptTab = (tab: chrome.tabs.Tab) => Boolean(tab.url && CHATGPT_MATCH.test(tab.url));
+
 const findChatGptTab = async () => {
+  const [activeInWindow] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (activeInWindow && isChatGptTab(activeInWindow)) {
+    return activeInWindow;
+  }
+
+  const inWindow = await chrome.tabs.query({ currentWindow: true });
+  const windowMatch = inWindow.find(isChatGptTab);
+  if (windowMatch) {
+    return windowMatch;
+  }
+
   const tabs = await chrome.tabs.query({});
-  return tabs.find((tab) => tab.url && CHATGPT_MATCH.test(tab.url));
+  return tabs.find(isChatGptTab);
 };
 
 const waitForTabLoaded = (tabId: number) =>
@@ -69,13 +82,13 @@ const createChatGptTab = async () => {
   return created.id;
 };
 
-const getOrCreateChatGptTab = async (startNewChat: boolean) => {
+/** Reuse the open ChatGPT tab/conversation. Only open chatgpt.com when no tab exists. */
+const getOrCreateChatGptTab = async () => {
   const existing = await findChatGptTab();
   if (existing?.id) {
-    await chrome.tabs.update(existing.id, { active: true, url: startNewChat ? CHATGPT_URL : existing.url });
-    if (startNewChat) {
-      await waitForTabLoaded(existing.id);
-    }
+    // Activate only — do not set url, or the page reloads and drops the current chat.
+    await chrome.tabs.update(existing.id, { active: true });
+    await waitForTabLoaded(existing.id);
     return existing.id;
   }
 
@@ -129,16 +142,16 @@ const generateAnswers = async (message: Extract<RuntimeMessage, { type: "GENERAT
     await notifyPanel({
       latestPrompt: prompt,
       status: "opening-chatgpt",
-      statusMessage: "Opening a new ChatGPT chat...",
+      statusMessage: "Using your current ChatGPT session...",
       lastError: ""
     });
 
-    const tabId = await getOrCreateChatGptTab(true);
+    const tabId = await getOrCreateChatGptTab();
     await injectChatGptAdapter(tabId);
 
     await notifyPanel({
       status: "submitting-prompt",
-      statusMessage: "Submitting prompt to ChatGPT..."
+      statusMessage: "Submitting prompt in the open ChatGPT chat..."
     });
 
     const result = await sendToTab<{ ok: boolean; text?: string; error?: string }>(tabId, {

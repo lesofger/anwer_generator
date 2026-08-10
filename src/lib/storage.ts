@@ -43,6 +43,7 @@ export const defaultState: AppState = {
   technicalAnswerMode: "resume",
   customPrompt: "",
   latestPrompt: "",
+  startNewChat: false,
   status: "idle",
   statusMessage: "Ready",
   lastError: ""
@@ -64,6 +65,7 @@ export const normalizeState = (saved: Partial<AppState> | undefined): AppState =
     ...saved,
     selectedResumeId: isResumeId(selectedResumeId) ? selectedResumeId : defaultState.selectedResumeId,
     resumes,
+    startNewChat: Boolean(saved?.startNewChat),
     selectedTemplateId: normalizeTemplateId(selectedTemplateId),
     technicalAnswerMode: isTechnicalAnswerMode(technicalAnswerMode)
       ? technicalAnswerMode

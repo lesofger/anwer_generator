@@ -211,15 +211,24 @@ const App = () => {
   };
 
   const toggleCurrentTabActivation = (enabled: boolean) => {
-    if (!currentJobTabId) {
+    if (enabled) {
+      if (!currentJobTabId) {
+        return;
+      }
+
+      void setAndPersist((current) => ({
+        ...current,
+        activeCaptureTabId: currentJobTabId,
+        targetTabId: currentJobTabId,
+        statusMessage: "Capture activated for this job page."
+      }));
       return;
     }
 
     void setAndPersist((current) => ({
       ...current,
-      activeCaptureTabId: enabled ? currentJobTabId : undefined,
-      targetTabId: enabled ? currentJobTabId : current.targetTabId,
-      statusMessage: enabled ? "Capture activated for this job page." : "Capture deactivated."
+      activeCaptureTabId: undefined,
+      statusMessage: "Capture deactivated."
     }));
   };
 
@@ -252,6 +261,51 @@ const App = () => {
     });
   };
 
+  const focusJobTab = async (tabId?: number) => {
+    try {
+      await sendRuntimeMessage<{ ok: boolean }>({
+        type: "FOCUS_JOB_TAB",
+        tabId
+      });
+    } catch {
+      if (!tabId) {
+        return;
+      }
+
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (tab.windowId != null) {
+          await chrome.windows.update(tab.windowId, { focused: true });
+        }
+        await chrome.tabs.update(tabId, { active: true });
+      } catch {
+        // Tab may have been closed while ChatGPT was generating.
+      }
+    }
+  };
+
+  const withGenerationKeepAlive = async (work: () => Promise<GenerateResponse>): Promise<GenerateResponse> => {
+    const port = chrome.runtime.connect({ name: "generation-keepalive" });
+    const heartbeat = window.setInterval(() => {
+      try {
+        port.postMessage({ type: "ping" });
+      } catch {
+        // Port may already be disconnected.
+      }
+    }, 15000);
+
+    try {
+      return await work();
+    } finally {
+      window.clearInterval(heartbeat);
+      try {
+        port.disconnect();
+      } catch {
+        // Already disconnected.
+      }
+    }
+  };
+
   const generateAnswers = async () => {
     const activeQuestions = state.questions.filter((question) => question.text.trim());
     if (!state.jobDescription.trim() || (!state.generateCoverLetter && activeQuestions.length === 0)) {
@@ -264,6 +318,8 @@ const App = () => {
       return;
     }
 
+    const returnTabId = state.targetTabId ?? state.activeCaptureTabId ?? currentJobTabId;
+    const startNewChat = state.startNewChat;
     const payload = {
       jobDescription: state.jobDescription,
       resumeText: activeResumeText,
@@ -281,30 +337,40 @@ const App = () => {
     };
     const latestPrompt = buildPrompt(payload);
 
-    await setAndPersist({
-      ...state,
+    await setAndPersist((current) => ({
+      ...current,
       latestPrompt,
+      targetTabId: returnTabId ?? current.targetTabId,
+      pendingReturnTabId: returnTabId ?? current.pendingReturnTabId,
       status: "opening-chatgpt",
-      statusMessage: "Opening a new ChatGPT chat...",
+      statusMessage: startNewChat ? "Opening a new ChatGPT chat..." : "Using your current ChatGPT session...",
       lastError: ""
-    });
+    }));
 
     try {
-      const response = await sendRuntimeMessage<GenerateResponse>({
-        type: "GENERATE_ANSWERS",
-        payload
-      });
+      const response = await withGenerationKeepAlive(() =>
+        sendRuntimeMessage<GenerateResponse>({
+          type: "GENERATE_ANSWERS",
+          payload,
+          returnTabId,
+          startNewChat
+        })
+      );
 
       if (!response.ok || !response.answers) {
+        await focusJobTab(returnTabId);
         await setAndPersist((current) => ({
           ...current,
           latestPrompt: response.prompt ?? latestPrompt,
           status: "failed",
           statusMessage: "Automation failed. Use the fallback prompt below.",
-          lastError: response.error ?? "ChatGPT did not return valid answers."
+          lastError: response.error ?? "ChatGPT did not return valid answers.",
+          pendingReturnTabId: undefined
         }));
         return;
       }
+
+      await focusJobTab(returnTabId);
 
       if (response.coverLetter?.trim()) {
         await downloadCoverDoc(response.coverLetter);
@@ -325,6 +391,8 @@ const App = () => {
       await setAndPersist((current) => ({
         ...current,
         latestPrompt: response.prompt ?? latestPrompt,
+        targetTabId: returnTabId ?? current.targetTabId,
+        pendingReturnTabId: undefined,
         status: "done",
         coverLetterText: response.coverLetter?.trim() ? formatCoverLetterForDisplay(response.coverLetter) : current.coverLetterText,
         statusMessage: response.coverLetter ? "Cover letter and answers generated." : "Answers generated.",
@@ -335,13 +403,20 @@ const App = () => {
       if (questionsWithGeneratedAnswers.some((question) => question.answer)) {
         await insertQuestionsIntoPage(questionsWithGeneratedAnswers, "auto");
       }
+
+      await focusJobTab(returnTabId);
+      window.setTimeout(() => {
+        void focusJobTab(returnTabId);
+      }, 500);
     } catch (error) {
+      await focusJobTab(returnTabId);
       await setAndPersist((current) => ({
         ...current,
         latestPrompt,
         status: "failed",
         statusMessage: "Could not reach the extension background worker.",
-        lastError: error instanceof Error ? error.message : String(error)
+        lastError: error instanceof Error ? error.message : String(error),
+        pendingReturnTabId: undefined
       }));
     }
   };
@@ -370,12 +445,21 @@ const App = () => {
   };
 
   const getTargetTabId = async () => {
-    if (state.targetTabId) {
-      return state.targetTabId;
+    for (const candidate of [state.targetTabId, state.activeCaptureTabId]) {
+      if (!candidate) {
+        continue;
+      }
+
+      try {
+        await chrome.tabs.get(candidate);
+        return candidate;
+      } catch {
+        // Tab may have been closed; try the next candidate.
+      }
     }
 
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (activeTab.id && !isChatGptUrl(activeTab.url)) {
+    if (activeTab?.id && !isChatGptUrl(activeTab.url)) {
       return activeTab.id;
     }
 
@@ -530,6 +614,7 @@ const App = () => {
 
   const usesCustomTemplate =
     state.selectedTemplateId === "custom" || state.questions.some((question) => question.templateId === "custom");
+  const captureEnabled = Boolean(state.activeCaptureTabId);
   const currentTabActive = Boolean(currentJobTabId && currentJobTabId === state.activeCaptureTabId);
 
   if (loading) {
@@ -547,12 +632,18 @@ const App = () => {
 
       <section className="top-action-bar">
         <button
-          className={currentTabActive ? "toolbar-button active" : "toolbar-button"}
-          disabled={!currentJobTabId}
-          onClick={() => toggleCurrentTabActivation(!currentTabActive)}
+          className={captureEnabled ? "toolbar-button active" : "toolbar-button"}
+          disabled={!currentJobTabId && !captureEnabled}
+          onClick={() => {
+            if (currentTabActive || (captureEnabled && !currentJobTabId)) {
+              toggleCurrentTabActivation(false);
+              return;
+            }
+            toggleCurrentTabActivation(true);
+          }}
           type="button"
         >
-          {currentTabActive ? "Capture on" : "Capture off"}
+          {captureEnabled ? "Capture on" : "Capture off"}
         </button>
         <button className="toolbar-button" onClick={clearAll} type="button">
           Reset
@@ -762,6 +853,19 @@ const App = () => {
       </section>
 
       <section className="card sticky-actions">
+        <label className="check-row">
+          <input
+            checked={state.startNewChat}
+            onChange={(event) => void setAndPersist((current) => ({ ...current, startNewChat: event.target.checked }))}
+            type="checkbox"
+          />
+          Start a new ChatGPT chat
+        </label>
+        <p className="muted">
+          {state.startNewChat
+            ? "Next generate opens a fresh ChatGPT conversation."
+            : "Next generate reuses your current ChatGPT conversation."}
+        </p>
         <button className="primary" onClick={() => void generateAnswers()} type="button">
           Generate all answers
         </button>

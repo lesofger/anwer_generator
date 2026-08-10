@@ -44,6 +44,10 @@ export interface AppState {
   coverLetterText: string;
   targetTabId?: number;
   activeCaptureTabId?: number;
+  /** Tab to activate after ChatGPT finishes (locked for the in-flight generation). */
+  pendingReturnTabId?: number;
+  /** When true, next generate starts a fresh ChatGPT conversation. */
+  startNewChat: boolean;
   questions: JobQuestion[];
   selectedTemplateId: PromptTemplateId;
   technicalAnswerMode: TechnicalAnswerMode;
@@ -98,6 +102,8 @@ export type RuntimeMessage =
   | {
       type: "GENERATE_ANSWERS";
       payload: GeneratePayload;
+      returnTabId?: number;
+      startNewChat?: boolean;
     }
   | {
       type: "CHATGPT_SUBMIT_PROMPT";
@@ -106,6 +112,10 @@ export type RuntimeMessage =
   | {
       type: "CHATGPT_RESULT";
       text: string;
+    }
+  | {
+      type: "FOCUS_JOB_TAB";
+      tabId?: number;
     }
   | {
       type: "INSERT_ANSWER";

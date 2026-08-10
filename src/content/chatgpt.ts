@@ -130,15 +130,17 @@ const waitForSendButton = async () => {
   throw new Error("Could not find the ChatGPT send button.");
 };
 
-const waitForNewAssistantMessage = async (previousCount: number) => {
+const waitForNewAssistantMessage = async (previousCount: number, previousLatest: string) => {
   let stableText = "";
   let stableTicks = 0;
 
   for (let attempt = 0; attempt < 240; attempt += 1) {
     const messages = getAssistantMessages();
     const latest = messages.at(-1) ?? "";
+    const isNewMessage =
+      (messages.length > previousCount || (latest && latest !== previousLatest)) && Boolean(latest);
 
-    if (messages.length > previousCount && latest) {
+    if (isNewMessage) {
       if (latest === stableText) {
         stableTicks += 1;
       } else {
@@ -157,14 +159,26 @@ const waitForNewAssistantMessage = async (previousCount: number) => {
   throw new Error("Timed out waiting for ChatGPT response.");
 };
 
+const requestReturnToJobTab = () => {
+  try {
+    void chrome.runtime.sendMessage({ type: "FOCUS_JOB_TAB" } satisfies RuntimeMessage);
+  } catch {
+    // Background may already be focusing; this is a best-effort backup.
+  }
+};
+
 const submitPrompt = async (prompt: string) => {
-  const beforeCount = getAssistantMessages().length;
+  const beforeMessages = getAssistantMessages();
+  const beforeCount = beforeMessages.length;
+  const previousLatest = beforeMessages.at(-1) ?? "";
   const box = await waitForPromptBox();
   setPromptText(box, prompt);
   await sleep(100);
   const button = await waitForSendButton();
   button.click();
-  return waitForNewAssistantMessage(beforeCount);
+  const text = await waitForNewAssistantMessage(beforeCount, previousLatest);
+  requestReturnToJobTab();
+  return text;
 };
 
 if (window.__jobAnswerHelperChatGptListener) {

@@ -4,6 +4,7 @@ import { loadState, patchState } from "../lib/storage";
 
 const CHATGPT_URL = "https://chatgpt.com/";
 const CHATGPT_MATCH = /^https:\/\/(chatgpt\.com|chat\.openai\.com)\//;
+const FOCUS_RETRY_DELAYS_MS = [0, 300, 900];
 
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -15,25 +16,77 @@ chrome.action.onClicked.addListener((tab) => {
   }
 });
 
+/** Sidepanel holds this port open during generation so the MV3 worker is not suspended mid-wait. */
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "generation-keepalive") {
+    return;
+  }
+
+  port.onMessage.addListener(() => {
+    // Heartbeats are intentionally ignored; receiving them keeps the worker warm.
+  });
+});
+
 const notifyPanel = async (patch: Partial<AppState>) => {
   await patchState(patch);
 };
 
-const focusTargetJobTab = async () => {
+const tabStillExists = async (tabId: number) => {
+  try {
+    await chrome.tabs.get(tabId);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Prefer an explicit tab, then pending/target/capture tabs from storage. */
+const resolveReturnTabId = async (preferredTabId?: number) => {
   const state = await loadState();
-  if (!state.targetTabId) {
-    return;
+  for (const candidate of [preferredTabId, state.pendingReturnTabId, state.targetTabId, state.activeCaptureTabId]) {
+    if (candidate && (await tabStillExists(candidate))) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
+const focusTab = async (tabId: number | undefined) => {
+  if (!tabId) {
+    return false;
   }
 
   try {
-    const tab = await chrome.tabs.get(state.targetTabId);
-    if (tab.windowId) {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.windowId != null) {
       await chrome.windows.update(tab.windowId, { focused: true });
     }
-    await chrome.tabs.update(state.targetTabId, { active: true });
+    await chrome.tabs.update(tabId, { active: true });
+    return true;
   } catch {
-    // The original job tab may have been closed; generation should still succeed.
+    return false;
   }
+};
+
+const focusTargetJobTab = async (preferredTabId?: number) => {
+  const tabId = await resolveReturnTabId(preferredTabId);
+  if (!tabId) {
+    return false;
+  }
+
+  let focused = false;
+  for (const delay of FOCUS_RETRY_DELAYS_MS) {
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    if (await focusTab(tabId)) {
+      focused = true;
+      break;
+    }
+  }
+
+  return focused;
 };
 
 const isChatGptTab = (tab: chrome.tabs.Tab) => Boolean(tab.url && CHATGPT_MATCH.test(tab.url));
@@ -82,11 +135,16 @@ const createChatGptTab = async () => {
   return created.id;
 };
 
-/** Reuse the open ChatGPT tab/conversation. Only open chatgpt.com when no tab exists. */
-const getOrCreateChatGptTab = async () => {
+/** Reuse the open ChatGPT tab, or force a brand-new conversation when requested. */
+const getOrCreateChatGptTab = async (startNewChat: boolean) => {
   const existing = await findChatGptTab();
   if (existing?.id) {
-    // Activate only — do not set url, or the page reloads and drops the current chat.
+    if (startNewChat) {
+      await chrome.tabs.update(existing.id, { active: true, url: CHATGPT_URL });
+      await waitForTabLoaded(existing.id);
+      return existing.id;
+    }
+
     await chrome.tabs.update(existing.id, { active: true });
     await waitForTabLoaded(existing.id);
     return existing.id;
@@ -137,21 +195,36 @@ const extractJson = (text: string) => {
 
 const generateAnswers = async (message: Extract<RuntimeMessage, { type: "GENERATE_ANSWERS" }>): Promise<GenerateResponse> => {
   const prompt = buildPrompt(message.payload);
+  const startNewChat = Boolean(message.startNewChat);
+  const returnTabId = await resolveReturnTabId(message.returnTabId);
 
   try {
     await notifyPanel({
       latestPrompt: prompt,
       status: "opening-chatgpt",
-      statusMessage: "Using your current ChatGPT session...",
-      lastError: ""
+      statusMessage: startNewChat ? "Opening a new ChatGPT chat..." : "Using your current ChatGPT session...",
+      lastError: "",
+      startNewChat,
+      ...(returnTabId
+        ? {
+            targetTabId: returnTabId,
+            pendingReturnTabId: returnTabId
+          }
+        : {})
     });
 
-    const tabId = await getOrCreateChatGptTab();
+    const tabId = await getOrCreateChatGptTab(startNewChat);
+    // Give a fresh ChatGPT page a moment for the composer to mount after navigation.
+    if (startNewChat) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
     await injectChatGptAdapter(tabId);
 
     await notifyPanel({
       status: "submitting-prompt",
-      statusMessage: "Submitting prompt in the open ChatGPT chat..."
+      statusMessage: startNewChat
+        ? "Submitting prompt in a new ChatGPT chat..."
+        : "Submitting prompt in the open ChatGPT chat..."
     });
 
     const result = await sendToTab<{ ok: boolean; text?: string; error?: string }>(tabId, {
@@ -175,12 +248,20 @@ const generateAnswers = async (message: Extract<RuntimeMessage, { type: "GENERAT
 
     await notifyPanel({
       status: "done",
-      statusMessage: "Answers generated. Returning to job page..."
+      statusMessage: "Answers generated. Returning to job page...",
+      pendingReturnTabId: undefined
     });
-    await focusTargetJobTab();
+    await focusTargetJobTab(returnTabId);
 
     return { ok: true, answers: parsed.answers, coverLetter: parsed.coverLetter ?? "", rawText: result.text, prompt };
   } catch (error) {
+    await notifyPanel({
+      status: "failed",
+      statusMessage: "Automation failed.",
+      lastError: error instanceof Error ? error.message : String(error),
+      pendingReturnTabId: undefined
+    });
+    await focusTargetJobTab(returnTabId);
     return {
       ok: false,
       prompt,
@@ -237,6 +318,11 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
     void loadState().then((state) => {
       sendResponse({ active: Boolean(sender.tab?.id && sender.tab.id === state.activeCaptureTabId) });
     });
+    return true;
+  }
+
+  if (message.type === "FOCUS_JOB_TAB") {
+    void focusTargetJobTab(message.tabId).then((ok) => sendResponse({ ok }));
     return true;
   }
 

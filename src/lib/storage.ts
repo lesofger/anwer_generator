@@ -2,6 +2,11 @@ import type { AppState, PromptTemplateId, TechnicalAnswerMode } from "./messages
 import { emptyResumes, type ResumeId } from "./resumes";
 
 const STORAGE_KEY = "jobAnswerHelperState";
+
+export const DEFAULT_JOB_DESCRIPTION = "AI engineer";
+
+export const effectiveJobDescription = (jobDescription: string) =>
+  jobDescription.trim() || DEFAULT_JOB_DESCRIPTION;
 const isTemplateId = (value: unknown): value is PromptTemplateId =>
   value === "short" ||
   value === "shortTechnical" ||
@@ -31,7 +36,7 @@ const isTechnicalAnswerMode = (value: unknown): value is TechnicalAnswerMode =>
   value === "resume" || value === "creative";
 
 export const defaultState: AppState = {
-  jobDescription: "",
+  jobDescription: DEFAULT_JOB_DESCRIPTION,
   selectedResumeId: "1",
   resumes: emptyResumes(),
   includeResume: false,
@@ -63,6 +68,7 @@ export const normalizeState = (saved: Partial<AppState> | undefined): AppState =
   return {
     ...defaultState,
     ...saved,
+    jobDescription: effectiveJobDescription(saved?.jobDescription ?? ""),
     selectedResumeId: isResumeId(selectedResumeId) ? selectedResumeId : defaultState.selectedResumeId,
     resumes,
     startNewChat: Boolean(saved?.startNewChat),

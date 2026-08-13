@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createCoverLetterDocBlob, formatCoverLetterForDisplay } from "../lib/document";
 import { buildPrompt } from "../lib/promptBuilder";
 import { promptTemplates } from "../lib/promptTemplates";
-import { defaultState, loadState, normalizeState, saveState } from "../lib/storage";
+import { defaultState, effectiveJobDescription, loadState, normalizeState, saveState } from "../lib/storage";
 import {
   getActiveResumeText,
   getResumeSlot,
@@ -67,10 +67,12 @@ const App = () => {
 
   const activeResumeText = getActiveResumeText(state.resumes, state.selectedResumeId);
 
+  const jobDescription = effectiveJobDescription(state.jobDescription);
+
   const draftPrompt = useMemo(
     () =>
       buildPrompt({
-        jobDescription: state.jobDescription,
+        jobDescription,
         resumeText: activeResumeText,
         includeResume: state.includeResume,
         generateCoverLetter: state.generateCoverLetter,
@@ -86,7 +88,7 @@ const App = () => {
       state.generateCoverLetter,
       activeResumeText,
       state.includeResume,
-      state.jobDescription,
+      jobDescription,
       state.questions,
       state.selectedTemplateId,
       state.technicalAnswerMode
@@ -308,12 +310,12 @@ const App = () => {
 
   const generateAnswers = async () => {
     const activeQuestions = state.questions.filter((question) => question.text.trim());
-    if (!state.jobDescription.trim() || (!state.generateCoverLetter && activeQuestions.length === 0)) {
+    if (!state.generateCoverLetter && activeQuestions.length === 0) {
       await setAndPersist({
         ...state,
         status: "failed",
-        statusMessage: "Add a job description and request a cover letter or at least one question.",
-        lastError: "Missing job description, cover letter request, or questions."
+        statusMessage: "Request a cover letter or add at least one question.",
+        lastError: "Missing cover letter request or questions."
       });
       return;
     }
@@ -321,7 +323,7 @@ const App = () => {
     const returnTabId = state.targetTabId ?? state.activeCaptureTabId ?? currentJobTabId;
     const startNewChat = state.startNewChat;
     const payload = {
-      jobDescription: state.jobDescription,
+      jobDescription,
       resumeText: activeResumeText,
       includeResume: state.includeResume,
       generateCoverLetter: state.generateCoverLetter,
@@ -533,6 +535,43 @@ const App = () => {
     return Boolean(response?.ok);
   };
 
+  const insertJobDescription = async () => {
+    const tabId = await getTargetTabId();
+    if (!tabId) {
+      await setAndPersist((current) => ({
+        ...current,
+        status: "failed",
+        statusMessage: "Could not find the job page tab.",
+        lastError: "Open the job application page, then try Insert in page again."
+      }));
+      return;
+    }
+
+    try {
+      const response = (await chrome.tabs.sendMessage(tabId, {
+        type: "INSERT_ANSWER",
+        answer: jobDescription,
+        field: "jobDescription"
+      } satisfies RuntimeMessage)) as { ok: boolean };
+
+      await setAndPersist((current) => ({
+        ...current,
+        status: response?.ok ? "done" : "failed",
+        statusMessage: response?.ok ? "Inserted job description into the page." : "Could not find a job description field.",
+        lastError: response?.ok
+          ? ""
+          : "Click the target field first, or make sure the page labels it as job description."
+      }));
+    } catch (error) {
+      await setAndPersist((current) => ({
+        ...current,
+        status: "failed",
+        statusMessage: "Could not reach the job page.",
+        lastError: error instanceof Error ? error.message : String(error)
+      }));
+    }
+  };
+
   const insertAnswer = async (question: JobQuestion) => {
     const tabId = await getTargetTabId();
     if (!tabId) {
@@ -656,14 +695,19 @@ const App = () => {
       <section className="card">
         <div className="section-title">
           <h2>Job description</h2>
-          <span>{state.jobDescription.length} chars</span>
+          <span>{jobDescription.length} chars</span>
         </div>
         <textarea
           value={state.jobDescription}
           onChange={(event) => void setAndPersist({ ...state, jobDescription: event.target.value })}
-          placeholder="AI engineer"
+          placeholder="Paste a full job post, or keep the default role title."
           rows={8}
         />
+        <div className="answer-actions">
+          <button onClick={() => void insertJobDescription()} type="button">
+            Insert in page
+          </button>
+        </div>
       </section>
 
       <section className="card">

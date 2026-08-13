@@ -121,6 +121,7 @@ export type RuntimeMessage =
       type: "INSERT_ANSWER";
       answer: string;
       questionText?: string;
+      field?: "jobDescription";
     }
   | {
       type: "UPLOAD_COVER_FILE";

@@ -186,6 +186,34 @@ const findQuestionElement = (questionText: string) => {
   return matches[0]?.element ?? null;
 };
 
+const jobDescriptionLabelHints = [
+  "job description",
+  "role description",
+  "position description",
+  "description of the role",
+  "description of role",
+  "about the role",
+  "about this role",
+  "role details",
+  "position details"
+];
+
+const findJobDescriptionElement = () => {
+  const matches = Array.from(
+    document.body.querySelectorAll<HTMLElement>("label, legend, p, div, span, h1, h2, h3, h4, strong")
+  )
+    .filter(isVisible)
+    .map((element) => {
+      const text = normalized(element.innerText || element.textContent || "");
+      const hintIndex = jobDescriptionLabelHints.findIndex((hint) => text.includes(hint));
+      return { element, hintIndex, textLength: text.length };
+    })
+    .filter(({ hintIndex }) => hintIndex >= 0)
+    .sort((a, b) => a.hintIndex - b.hintIndex || a.textLength - b.textLength);
+
+  return matches[0]?.element ?? null;
+};
+
 const firstEditableAfter = (questionElement: HTMLElement) => {
   const candidates = editableCandidates();
   const questionRect = questionElement.getBoundingClientRect();
@@ -206,6 +234,21 @@ const firstEditableAfter = (questionElement: HTMLElement) => {
     .map((candidate) => ({ candidate, rect: candidate.getBoundingClientRect() }))
     .filter(({ rect }) => rect.top >= questionRect.top - 6)
     .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left)[0]?.candidate;
+};
+
+const insertJobDescription = (jobDescription: string) => {
+  const labelElement = findJobDescriptionElement();
+  const target = labelElement
+    ? firstEditableAfter(labelElement)
+    : lastEditable ?? document.activeElement;
+
+  if (!isEditable(target)) {
+    return { ok: false, copied: false };
+  }
+
+  fillEditable(target, jobDescription);
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  return { ok: true, copied: false };
 };
 
 const insertAnswer = (answer: string, questionText?: string) => {
@@ -259,7 +302,11 @@ document.addEventListener("mousedown", (event) => {
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
   if (message.type === "INSERT_ANSWER") {
-    sendResponse(insertAnswer(message.answer, message.questionText));
+    sendResponse(
+      message.field === "jobDescription"
+        ? insertJobDescription(message.answer)
+        : insertAnswer(message.answer, message.questionText)
+    );
     return true;
   }
 

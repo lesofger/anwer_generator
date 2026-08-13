@@ -661,7 +661,7 @@ const App = () => {
         <textarea
           value={state.jobDescription}
           onChange={(event) => void setAndPersist({ ...state, jobDescription: event.target.value })}
-          placeholder="Select text on the job page, or paste the job description here."
+          placeholder="AI engineer"
           rows={8}
         />
       </section>
@@ -853,22 +853,19 @@ const App = () => {
       </section>
 
       <section className="card sticky-actions">
-        <label className="check-row">
-          <input
-            checked={state.startNewChat}
-            onChange={(event) => void setAndPersist((current) => ({ ...current, startNewChat: event.target.checked }))}
-            type="checkbox"
-          />
-          Start a new ChatGPT chat
-        </label>
-        <p className="muted">
-          {state.startNewChat
-            ? "Next generate opens a fresh ChatGPT conversation."
-            : "Next generate reuses your current ChatGPT conversation."}
-        </p>
-        <button className="primary" onClick={() => void generateAnswers()} type="button">
-          Generate all answers
-        </button>
+        <div className="generate-row">
+          <label className="generate-option" title="New chat">
+            <input
+              aria-label="New chat"
+              checked={state.startNewChat}
+              onChange={(event) => void setAndPersist((current) => ({ ...current, startNewChat: event.target.checked }))}
+              type="checkbox"
+            />
+          </label>
+          <button className="primary" onClick={() => void generateAnswers()} type="button">
+            Generate all answers
+          </button>
+        </div>
         <p className={`status ${state.status}`}>{state.statusMessage}</p>
         {state.lastError ? <p className="error">{state.lastError}</p> : null}
       </section>

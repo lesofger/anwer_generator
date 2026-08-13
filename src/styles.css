@@ -243,13 +243,45 @@ select {
 
 .sticky-actions {
   position: sticky;
-  bottom: 12px;
+  bottom: 8px;
   z-index: 5;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
 }
 
-.sticky-actions .generate-hint {
+.sticky-actions .generate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sticky-actions .generate-option {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
   margin: 0;
-  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sticky-actions .generate-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.sticky-actions .primary {
+  flex: 1 1 auto;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.sticky-actions .status,
+.sticky-actions .error {
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .activation-card {
